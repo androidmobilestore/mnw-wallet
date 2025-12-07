@@ -1,313 +1,206 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Copy, Eye, EyeOff, Send, Download, RefreshCw } from 'lucide-react'
-import SendModal from '@/components/modals/SendModal'
-import ReceiveModal from '@/components/modals/ReceiveModal'
+import { ArrowDownUp, ArrowUpRight, RefreshCw } from 'lucide-react'
 import ExchangeModal from '@/components/modals/ExchangeModal'
-import { ExchangeService } from '@/lib/exchangeService'
 
 interface WalletCardProps {
   user: any
 }
 
 export default function WalletCard({ user }: WalletCardProps) {
-  const [showAddress, setShowAddress] = useState(false)
-  const [copied, setCopied] = useState(false)
-  
-  // Модальные окна
-  const [sendModal, setSendModal] = useState<{ isOpen: boolean; currency: 'TRX' | 'USDT' | 'RUB' | null }>({
-    isOpen: false,
-    currency: null
-  })
-  const [receiveModal, setReceiveModal] = useState<{ isOpen: boolean; currency: 'TRX' | 'USDT' | 'RUB' | null }>({
-    isOpen: false,
-    currency: null
-  })
-  const [exchangeModal, setExchangeModal] = useState(false)
-
-  // Реальные балансы из блокчейна
-  const [realBalances, setRealBalances] = useState<{
-    TRX: number
-    USDT: number
-    loading: boolean
-  }>({
-    TRX: 0,
+  const [balances, setBalances] = useState({
+    RUB: 0,
     USDT: 0,
-    loading: true
+    TRX: 0
   })
-
-  // Курсы валют
-  const [rates, setRates] = useState<any>({})
-
-  useEffect(() => {
-    loadRates()
-    const interval = setInterval(loadRates, 30000) // Обновление каждые 30 сек
-    return () => clearInterval(interval)
-  }, [])
+  const [rates, setRates] = useState({
+    USDT_TO_RUB: 80,
+    TRX_TO_RUB: 21.5
+  })
+  const [loading, setLoading] = useState(true)
+  const [exchangeModalOpen, setExchangeModalOpen] = useState(false)
 
   useEffect(() => {
-    loadBalances()
-    const interval = setInterval(loadBalances, 30000) // Обновление каждые 30 сек
-    return () => clearInterval(interval)
-  }, [user?.tronAddress])
+    if (user?.id) {
+      loadBalances()
+      loadRates()
+      
+      // Обновляем курсы каждые 30 секунд
+      const interval = setInterval(loadRates, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [user])
 
   const loadBalances = async () => {
-    if (!user?.tronAddress) return
-    
+    setLoading(true)
     try {
-      console.log('💰 Loading balances for:', user.tronAddress)
+      const response = await fetch(`/api/wallet/balance?userId=${user.id}`)
       
-      const response = await fetch('/api/wallet/balance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: user.tronAddress })
-      })
+      if (!response.ok) {
+        console.error('Failed to fetch balances:', response.status)
+        setLoading(false)
+        return
+      }
+
+      const text = await response.text()
+      if (!text) {
+        console.error('Empty response from server')
+        setLoading(false)
+        return
+      }
+
+      const data = JSON.parse(text)
       
-      const data = await response.json()
-      
-      if (data.success) {
-        setRealBalances({
-          TRX: data.balanceTRX,
-          USDT: data.balanceUSDT,
-          loading: false
+      if (data.success && data.balances) {
+        setBalances({
+          RUB: data.balances.RUB || 0,
+          USDT: data.balances.USDT || 0,
+          TRX: data.balances.TRX || 0
         })
-        console.log('✅ Balances loaded:', data)
-      } else {
-        console.error('❌ Balance fetch failed:', data.error)
-        setRealBalances(prev => ({ ...prev, loading: false }))
       }
     } catch (error) {
-      console.error('❌ Error loading balances:', error)
-      setRealBalances(prev => ({ ...prev, loading: false }))
+      console.error('Error loading balances:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
   const loadRates = async () => {
-    await ExchangeService.getRates()
-    const usdtToRub = ExchangeService.getRate('USDT', 'RUB')
-    const trxToRub = ExchangeService.getRate('TRX', 'RUB')
-    
-    setRates({
-      USDT: usdtToRub?.rate || 0,
-      TRX: trxToRub?.rate || 0
-    })
+    try {
+      const response = await fetch('/api/rates')
+      const data = await response.json()
+      
+      if (data.success) {
+        setRates({
+          USDT_TO_RUB: data.rates.USDT_TO_RUB,
+          TRX_TO_RUB: data.rates.TRX_TO_RUB
+        })
+      }
+    } catch (error) {
+      console.error('Error loading rates:', error)
+    }
   }
 
-  const copyAddress = () => {
-    navigator.clipboard.writeText(user?.tronAddress || '')
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const formatAddress = (address: string) => {
-    if (!address) return ''
-    return `${address.slice(0, 8)}...${address.slice(-6)}`
-  }
-
-  const getTotalInRub = () => {
-    const trxInRub = realBalances.TRX * rates.TRX
-    const usdtInRub = realBalances.USDT * rates.USDT
-    const rub = user?.balanceRUB || 0
-    return trxInRub + usdtInRub + rub
-  }
+  // Расчёт общего баланса в рублях
+  const totalInRUB = 
+    balances.RUB + 
+    (balances.USDT * rates.USDT_TO_RUB) + 
+    (balances.TRX * rates.TRX_TO_RUB)
 
   return (
     <>
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-shadow duration-200">
-        {/* Заголовок */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Баланс кошелька</h2>
-            <p className="text-xs text-gray-500 mt-1">{user?.cyberLogin}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Всего</p>
-            <p className="text-lg font-bold text-gray-900">
-              {realBalances.loading ? (
-                <span className="animate-pulse">...</span>
-              ) : (
-                `≈ ${getTotalInRub().toLocaleString('ru-RU')} ₽`
-              )}
-            </p>
-          </div>
-        </div>
+      <div className="bg-gradient-to-br from-moneteum to-moneteum-dark rounded-2xl p-6 relative overflow-hidden">
+        {/* Декоративные элементы */}
+        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
 
-        {/* Адрес */}
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1 font-semibold">TRON ADDRESS</p>
-              <p className="text-sm font-mono text-gray-900 font-medium">
-                {showAddress ? user?.tronAddress : formatAddress(user?.tronAddress || '')}
+        <div className="relative z-10">
+          {/* Заголовок */}
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-white/80 text-sm">Общий баланс</p>
+            <button
+              onClick={() => {
+                loadBalances()
+                loadRates()
+              }}
+              disabled={loading}
+              className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          <h2 className="text-white text-4xl font-black mb-6">
+            {loading ? '---' : totalInRUB.toFixed(2)} ₽
+          </h2>
+
+          {/* Балансы по валютам */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {/* RUB */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/20">
+              <p className="text-white/70 text-xs mb-1">₽ RUB</p>
+              <p className="text-white text-xl font-bold">
+                {loading ? '---' : balances.RUB.toFixed(2)}
               </p>
             </div>
-            <div className="flex gap-2 ml-4">
+
+            {/* USDT */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/20">
+              <p className="text-white/70 text-xs mb-1">$ USDT</p>
+              <p className="text-white text-xl font-bold">
+                {loading ? '---' : balances.USDT.toFixed(2)}
+              </p>
+              <p className="text-white/50 text-xs mt-1">
+                ≈ {(balances.USDT * rates.USDT_TO_RUB).toFixed(2)} ₽
+              </p>
+            </div>
+
+            {/* TRX */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/20">
+              <p className="text-white/70 text-xs mb-1">□ TRX</p>
+              <p className="text-white text-xl font-bold">
+                {loading ? '---' : balances.TRX.toFixed(2)}
+              </p>
+              <p className="text-white/50 text-xs mt-1">
+                ≈ {(balances.TRX * rates.TRX_TO_RUB).toFixed(2)} ₽
+              </p>
+            </div>
+          </div>
+
+          {/* Кнопки действий */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <button
+              onClick={() => setExchangeModalOpen(true)}
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 text-white py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+            >
+              <ArrowDownUp size={20} />
+              Обменять
+            </button>
+
+            <button className="bg-white hover:bg-white/90 text-moneteum py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2">
+              Пополнить
+              <ArrowUpRight size={20} />
+            </button>
+          </div>
+
+          {/* TRON адрес */}
+          <div>
+            <p className="text-white/70 text-xs mb-2">TRON адрес:</p>
+            <div className="relative">
+              <input
+                readOnly
+                value={user?.tronAddress || ''}
+                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white font-mono text-sm cursor-pointer select-all focus:outline-none focus:border-white/40"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
               <button
-                onClick={() => setShowAddress(!showAddress)}
-                className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 rounded-lg transition-colors"
+                onClick={() => {
+                  if (user?.tronAddress) {
+                    navigator.clipboard.writeText(user.tronAddress)
+                    alert('✅ Адрес скопирован!')
+                  }
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition"
+                aria-label="Копировать адрес"
               >
-                {showAddress ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-              <button
-                onClick={copyAddress}
-                className="w-8 h-8 flex items-center justify-center hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                {copied ? <span className="text-moneteum text-xs">✓</span> : <Copy size={16} />}
+                📋
               </button>
             </div>
           </div>
         </div>
-
-        {/* Балансы */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          {/* TRX */}
-          <div className="col-span-2 bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-5 text-white">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-xs opacity-70 mb-1">TRX</p>
-                <p className="text-3xl font-bold">
-                  {realBalances.loading ? (
-                    <span className="animate-pulse">...</span>
-                  ) : (
-                    realBalances.TRX.toFixed(2)
-                  )}
-                </p>
-              </div>
-              <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
-                <span className="text-lg">◈</span>
-              </div>
-            </div>
-            <p className="text-xs opacity-60">
-              ≈ {(realBalances.TRX * rates.TRX).toLocaleString('ru-RU')} ₽
-            </p>
-            <div className="flex gap-2 mt-4">
-              <button 
-                onClick={() => setSendModal({ isOpen: true, currency: 'TRX' })}
-                className="flex-1 bg-white/10 hover:bg-white/20 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1"
-              >
-                <Send size={14} />
-                Отправить
-              </button>
-              <button 
-                onClick={() => setReceiveModal({ isOpen: true, currency: 'TRX' })}
-                className="flex-1 bg-white/10 hover:bg-white/20 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1"
-              >
-                <Download size={14} />
-                Получить
-              </button>
-            </div>
-          </div>
-
-          {/* USDT */}
-          <div className="border-2 border-moneteum rounded-xl p-4 bg-white">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">USDT TRC-20</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {realBalances.loading ? (
-                    <span className="animate-pulse">...</span>
-                  ) : (
-                    realBalances.USDT.toFixed(2)
-                  )}
-                </p>
-              </div>
-              <div className="w-8 h-8 bg-moneteum rounded-lg flex items-center justify-center">
-                <span className="text-white text-sm font-bold">₮</span>
-              </div>
-            </div>
-            <p className="text-xs text-gray-500 mb-3">
-              ≈ {(realBalances.USDT * rates.USDT).toLocaleString('ru-RU')} ₽
-            </p>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setSendModal({ isOpen: true, currency: 'USDT' })}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg text-xs font-semibold transition-colors"
-              >
-                <Send size={12} className="inline mr-1" />
-                Отправить
-              </button>
-              <button 
-                onClick={() => setReceiveModal({ isOpen: true, currency: 'USDT' })}
-                className="flex-1 bg-moneteum hover:bg-moneteum-dark text-white py-2 rounded-lg text-xs font-semibold transition-colors"
-              >
-                <Download size={12} className="inline mr-1" />
-                Получить
-              </button>
-            </div>
-          </div>
-
-          {/* RUB */}
-          <div className="border border-gray-200 rounded-xl p-4 bg-white">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Рубли</p>
-                <p className="text-2xl font-bold text-gray-900">{user?.balanceRUB?.toLocaleString('ru-RU') || '0'}</p>
-              </div>
-              <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                <span className="text-gray-700 text-sm font-bold">₽</span>
-              </div>
-            </div>
-            <p className="text-xs text-gray-500 mb-3">Виртуальный баланс</p>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setSendModal({ isOpen: true, currency: 'RUB' })}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg text-xs font-semibold transition-colors"
-              >
-                <Send size={12} className="inline mr-1" />
-                Отправить
-              </button>
-              <button 
-                onClick={() => setReceiveModal({ isOpen: true, currency: 'RUB' })}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 py-2 rounded-lg text-xs font-semibold transition-colors"
-              >
-                <Download size={12} className="inline mr-1" />
-                Получить
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Кнопка обмена */}
-        <button 
-          onClick={() => setExchangeModal(true)}
-          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg flex items-center justify-center gap-2"
-        >
-          <RefreshCw size={20} />
-          Обменять валюту
-        </button>
       </div>
 
-      {/* Модальные окна */}
-      {sendModal.isOpen && sendModal.currency && (
-        <SendModal
-          isOpen={sendModal.isOpen}
-          onClose={() => setSendModal({ isOpen: false, currency: null })}
-          currency={sendModal.currency}
-          balance={sendModal.currency === 'RUB' ? user?.balanceRUB || 0 : realBalances[sendModal.currency]}
-          privateKey={user?.privateKey}
+      {/* Модальное окно обмена */}
+      {exchangeModalOpen && (
+        <ExchangeModal
+          onClose={() => setExchangeModalOpen(false)}
+          userId={user.id}
+          usdtBalance={balances.USDT}
+          rubBalance={balances.RUB}
+          currentRate={rates.USDT_TO_RUB}
         />
       )}
-
-      {receiveModal.isOpen && receiveModal.currency && (
-        <ReceiveModal
-          isOpen={receiveModal.isOpen}
-          onClose={() => setReceiveModal({ isOpen: false, currency: null })}
-          currency={receiveModal.currency}
-          address={user?.tronAddress || ''}
-          cyberLogin={user?.cyberLogin || ''}
-        />
-      )}
-
-      <ExchangeModal
-        isOpen={exchangeModal}
-        onClose={() => setExchangeModal(false)}
-        balances={{
-          TRX: realBalances.TRX,
-          USDT: realBalances.USDT,
-          RUB: user?.balanceRUB || 0
-        }}
-      />
     </>
   )
 }

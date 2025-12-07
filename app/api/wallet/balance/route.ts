@@ -1,81 +1,57 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma/db'
 
-const TRONGRID_API = 'https://api.trongrid.io'
-const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
-
-export async function POST(request: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const { address } = await request.json()
+    const userId = req.nextUrl.searchParams.get('userId')
     
-    if (!address) {
-      return NextResponse.json({ error: 'Address required' }, { status: 400 })
-    }
+    console.log('📊 Balance request for userId:', userId)
     
-    console.log('💰 Fetching balances for:', address)
-    
-    // Получаем баланс TRX
-    const trxResponse = await fetch(`${TRONGRID_API}/v1/accounts/${address}`)
-    const trxData = await trxResponse.json()
-    
-    let trxBalance = 0
-    if (trxData.data && trxData.data.length > 0) {
-      trxBalance = (trxData.data[0].balance || 0) / 1_000_000 // Sun to TRX
-    }
-    
-    console.log('✅ TRX Balance:', trxBalance)
-    
-    // Получаем баланс USDT TRC-20
-    let usdtBalance = 0
-    try {
-      const usdtResponse = await fetch(
-        `${TRONGRID_API}/v1/accounts/${address}/transactions/trc20?limit=1&contract_address=${USDT_CONTRACT}`
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: 'userId is required' }, 
+        { status: 400 }
       )
-      const usdtData = await usdtResponse.json()
-      
-      // Если есть транзакции USDT, запрашиваем баланс
-      if (usdtData.data && usdtData.data.length > 0) {
-        const balanceResponse = await fetch(
-          `${TRONGRID_API}/wallet/triggerconstantcontract`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              owner_address: address,
-              contract_address: USDT_CONTRACT,
-              function_selector: 'balanceOf(address)',
-              parameter: address.replace(/^0x/, '').padStart(64, '0'),
-              visible: true
-            })
-          }
-        )
-        const balanceData = await balanceResponse.json()
-        
-        if (balanceData.constant_result && balanceData.constant_result[0]) {
-          const hexBalance = balanceData.constant_result[0]
-          usdtBalance = parseInt(hexBalance, 16) / 1_000_000
-        }
-      }
-    } catch (error) {
-      console.log('⚠️ USDT balance check failed (probably no USDT):', error)
     }
-    
-    console.log('✅ USDT Balance:', usdtBalance)
-    
-    return NextResponse.json({
-      success: true,
-      address,
-      balanceTRX: trxBalance,
-      balanceUSDT: usdtBalance,
-      timestamp: new Date().toISOString()
+
+    // Получаем пользователя с кошельками
+    const user = await prisma.user.findUnique({ 
+      where: { id: userId }, 
+      include: { wallets: true } 
     })
-    
-  } catch (error: any) {
-    console.error('❌ Error fetching balances:', error)
+
+    if (!user) {
+      console.log('❌ User not found:', userId)
+      return NextResponse.json(
+        { success: false, error: 'User not found' }, 
+        { status: 404 }
+      )
+    }
+
+    // Формируем балансы
+    const balances: { [key: string]: number } = {
+      RUB: 0,
+      USDT: 0,
+      TRX: 0
+    }
+
+    user.wallets.forEach((wallet) => {
+      if (wallet.currency in balances) {
+        balances[wallet.currency] = wallet.balance
+      }
+    })
+
+    console.log('✅ Balances loaded:', balances)
+
+    return NextResponse.json({ 
+      success: true, 
+      balances 
+    })
+
+  } catch (error) {
+    console.error('❌ Error in /api/wallet/balance:', error)
     return NextResponse.json(
-      { 
-        success: false,
-        error: error.message 
-      },
+      { success: false, error: 'Internal Server Error' }, 
       { status: 500 }
     )
   }

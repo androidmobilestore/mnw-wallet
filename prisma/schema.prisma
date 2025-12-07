@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Модель пользователя (под ваш проект с Telegram)
+// Модель пользователя (под Telegram Mini App)
 model User {
   id                   String        @id @default(cuid())
   telegramId           String?       @unique
@@ -32,6 +32,7 @@ model User {
   wallets              Wallet[]
   transactions         Transaction[]
   withdrawals          Withdrawal[]
+  exchanges            Exchange[]
   referrals            User[]        @relation("Referrals")
   referrer             User?         @relation("Referrals", fields: [referredBy], references: [referralCode], onDelete: SetNull)
 }
@@ -41,9 +42,9 @@ model Wallet {
   id           String        @id @default(cuid())
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currency     String
+  currency     String        // RUB, USDT, TRX
   balance      Float         @default(0)
-  address      String?
+  address      String?       // Для криптовалют
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -60,17 +61,17 @@ model Transaction {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   walletId    String
   wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  type        String
+  type        String   // DEPOSIT, WITHDRAWAL, TRANSFER, EXCHANGE
   amount      Float
   currency    String
-  status      String
+  status      String   // PENDING, COMPLETED, FAILED, CANCELLED
   description String?
-  metadata    String?
+  metadata    String?  // JSON данные
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
-// Модель заявок на вывод
+// Модель заявок на вывод наличных
 model Withdrawal {
   id          String   @id @default(cuid())
   userId      String
@@ -79,13 +80,74 @@ model Withdrawal {
   wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
   amount      Float
   currency    String
-  status      String
+  status      String   // PENDING, APPROVED, COMPLETED, CANCELLED
   token       String   @unique
-  city        String
+  city        String   // moscow, nnov, kgd
   fullName    String
-  contactType String
+  contactType String   // telegram or phone
   contact     String
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ✅ НОВАЯ МОДЕЛЬ: Администраторы
+model Admin {
+  id          String   @id @default(cuid())
+  telegramId  String   @unique
+  username    String?
+  firstName   String?
+  lastName    String?
+  role        String   // SUPER_ADMIN, EXCHANGE_OPERATOR, WITHDRAWAL_OPERATOR
+  city        String?  // Для операторов выдачи (moscow, nnov, kgd)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Связь с обработанными заявками
+  exchanges   Exchange[]
+}
+
+// ✅ НОВАЯ МОДЕЛЬ: Обмены валют
+model Exchange {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Тип обмена
+  type              String    // USDT_TO_RUB, RUB_TO_USDT
+  
+  // Суммы
+  fromAmount        Float
+  fromCurrency      String
+  toAmount          Float
+  toCurrency        String
+  
+  // Курс показанный пользователю
+  exchangeRate      Float
+  
+  // Статус
+  status            String    // PENDING, PENDING_APPROVAL, APPROVED, COMPLETED, CANCELLED
+  
+  // Транзакция (для USDT → RUB)
+  txid              String?
+  
+  // Данные откупа (заполняет администратор)
+  adminId           String?
+  admin             Admin?    @relation(fields: [adminId], references: [id])
+  buyoutRate        Float?    // Курс откупа администратором
+  buyoutAmount      Float?    // Сумма откупа в RUB
+  profit            Float?    // Прибыль компании
+  
+  // Дополнительные данные для RUB → USDT
+  destinationAddress String? // Адрес куда отправить USDT
+  
+  // Временные метки
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  completedAt       DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
 }
