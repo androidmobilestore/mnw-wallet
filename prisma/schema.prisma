@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  telegramId    String?  @unique
+  cyberLogin    String   @unique
+  username      String?
+  firstName     String?
+  lastName      String?
+  
+  tronAddress   String   @unique
+  encryptedPrivateKey String
+  encryptedMnemonic   String
+  
+  balanceRUB    Float    @default(0)
+  
+  referralCode  String   @unique
+  referredBy    String?
+  referralBalance Float  @default(0)
+  
+  totalDeals    Int      @default(0)
+  totalVolume   Float    @default(0)
+  
+  isVerified    Boolean  @default(false)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  transactions  Transaction[]
+  referrals     Referral[]
+  withdrawals   Withdrawal[]
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  userId        String
+  type          String
+  currency      String
+  amount        Float
+  toAddress     String?
+  fromAddress   String?
+  status        String
+  txHash        String?
+  description   String?
+  
+  createdAt     DateTime @default(now())
+  
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model Referral {
+  id            String   @id @default(uuid())
+  userId        String
+  referredUserId String
+  commission    Float    @default(0)
+  totalEarned   Float    @default(0)
+  
+  createdAt     DateTime @default(now())
+  
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model Withdrawal {
+  id            String   @id @default(uuid())
+  userId        String
+  amount        Float
+  city          String
+  fullName      String
+  contactType   String
+  contact       String
+  token         String   @unique
+  operatorToken String
+  status        String   @default("pending")
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  user          User     @relation(fields: [userId], references: [id])
+}

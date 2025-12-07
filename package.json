@@ -3,25 +3,47 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@tronweb3/tronwallet-adapter-react-hooks": "^1.1.10",
+    "@tronweb3/tronwallet-adapters": "^1.1.5",
+    "@twa-dev/sdk": "^8.0.2",
+    "bip39": "^3.1.0",
+    "bs58": "^6.0.0",
+    "buffer": "^6.0.3",
+    "create-hash": "^1.2.0",
+    "crypto-browserify": "^3.12.0",
+    "elliptic": "^6.6.0",
+    "framer-motion": "^12.23.25",
+    "hdkey": "^2.1.0",
+    "lucide-react": "^0.556.0",
     "next": "16.0.7",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "stream-browserify": "^3.0.0",
+    "tronweb": "^5.3.2",
+    "tweetnacl": "^1.0.3",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@prisma/client": "^5.22.0",
+    "@types/bs58": "^4.0.4",
+    "@types/elliptic": "^6.4.18",
+    "@types/hdkey": "^2.0.3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.22",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.7",
-    "tailwindcss": "^4",
+    "postcss": "^8.5.6",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.18",
     "typescript": "^5"
   }
 }
