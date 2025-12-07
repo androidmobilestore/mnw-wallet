@@ -3,12 +3,10 @@
 import { X, Shield, MapPin, Clock, CheckCircle } from 'lucide-react'
 
 interface VerificationModalProps {
-  isOpen: boolean
   onClose: () => void
 }
 
 export default function VerificationModal({ isOpen, onClose }: VerificationModalProps) {
-  if (!isOpen) return null
 
   const offices = [
     {

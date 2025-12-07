@@ -15,45 +15,23 @@ interface WalletSetupProps {
 }
 
 export default function WalletSetup({ onComplete }: WalletSetupProps) {
-  const [step, setStep] = useState<'create' | 'show'>('create')
+  const [step, setStep] = useState<'create' | 'loading' | 'show'>('create')
   const [copied, setCopied] = useState(false)
-  const [demoMnemonic, setDemoMnemonic] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
+  const [walletData, setWalletData] = useState<{
+    userId: string
+    mnemonic: string
+    address: string
+    privateKey: string
+    cyberLogin: string
+    referralCode: string
+  } | null>(null)
 
   const handleCreate = async () => {
-    setLoading(true)
+    setStep('loading')
+    
     try {
       console.log('🚀 Starting wallet creation...')
       
-      // Генерируем мнемонику локально
-      const bip39 = await import('bip39')
-      const newMnemonic = bip39.generateMnemonic(128)
-      
-      console.log('✅ Mnemonic generated locally')
-      
-      setDemoMnemonic(newMnemonic.split(' '))
-      setStep('show')
-    } catch (error) {
-      console.error('❌ Error generating mnemonic:', error)
-      alert('Ошибка при создании кошелька: ' + (error as Error).message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(demoMnemonic.join(' '))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const handleContinue = async () => {
-    setLoading(true)
-    
-    try {
-      console.log('🔐 Creating wallet with database save...')
-      
-      // Вызываем API который создаст кошелёк И сохранит в БД
       const response = await fetch('/api/wallet/create', {
         method: 'POST',
         headers: { 
@@ -77,25 +55,61 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
       
       const data = await response.json()
       
+      console.log('📦 Received data:', data)
+      
       if (!data.success) {
         throw new Error(data.error || 'Wallet creation failed')
       }
       
+      if (!data.mnemonic) {
+        throw new Error('Mnemonic not received from server')
+      }
+      
       console.log('✅ Wallet created and saved:', data.userId)
       
-      // Передаём все данные включая userId
-      onComplete(
-        data.userId,
-        data.mnemonic,
-        data.address,
-        data.privateKey,
-        data.cyberLogin,
-        data.referralCode
-      )
+      setWalletData({
+        userId: data.userId,
+        mnemonic: data.mnemonic,
+        address: data.address,
+        privateKey: data.privateKey,
+        cyberLogin: data.cyberLogin,
+        referralCode: data.referralCode
+      })
+      
+      setStep('show')
+      
     } catch (error) {
       console.error('❌ Error:', error)
       alert('Ошибка при создании кошелька: ' + (error as Error).message)
-      setLoading(false)
+      setStep('create')
+    }
+  }
+
+  const handleCopy = () => {
+    if (walletData?.mnemonic) {
+      navigator.clipboard.writeText(walletData.mnemonic)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleContinue = () => {
+    if (walletData) {
+      localStorage.setItem('user', JSON.stringify({
+        userId: walletData.userId,
+        cyberLogin: walletData.cyberLogin,
+        tronAddress: walletData.address,
+        referralCode: walletData.referralCode
+      }))
+      
+      onComplete(
+        walletData.userId,
+        walletData.mnemonic,
+        walletData.address,
+        walletData.privateKey,
+        walletData.cyberLogin,
+        walletData.referralCode
+      )
     }
   }
 
@@ -145,16 +159,39 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
 
             <button
               onClick={handleCreate}
-              disabled={loading}
-              className="w-full bg-moneteum text-white py-4 rounded-xl font-bold text-base hover:bg-moneteum-dark transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-moneteum text-white py-4 rounded-xl font-bold text-base hover:bg-moneteum-dark transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02]"
             >
-              {loading ? 'Создание...' : 'Создать кошелёк'}
+              Создать кошелёк
             </button>
           </div>
         </div>
       </main>
     )
   }
+
+  if (step === 'loading') {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-moneteum-light/30 px-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-200 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="w-20 h-20 bg-gradient-to-br from-moneteum to-moneteum-dark rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
+                <KeyRound size={40} className="text-white" strokeWidth={2} />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              Создаём ваш кошелёк...
+            </h2>
+            <p className="text-gray-600 text-sm">
+              Генерируем безопасные ключи и сохраняем данные
+            </p>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  const mnemonicWords = walletData?.mnemonic ? walletData.mnemonic.split(' ') : []
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-moneteum-light/30 px-4 py-8">
@@ -189,76 +226,143 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 mb-6">
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {demoMnemonic.map((word, index) => (
-                <div
-                  key={index}
-                  className="bg-white/10 border border-white/20 rounded-xl p-3 flex items-center gap-3"
-                >
-                  <span className="text-white/50 font-bold text-sm w-6">
-                    {index + 1}.
-                  </span>
-                  <span className="text-white font-mono font-semibold text-sm">
-                    {word}
-                  </span>
+          {mnemonicWords.length > 0 ? (
+            <>
+              <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 mb-6">
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {mnemonicWords.map((word, index) => (
+                    <div
+                      key={index}
+                      className="bg-white/10 border border-white/20 rounded-xl p-3 flex items-center gap-3"
+                    >
+                      <span className="text-white/50 font-bold text-sm w-6">
+                        {index + 1}.
+                      </span>
+                      <span className="text-white font-mono font-semibold text-sm">
+                        {word}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+
+                <button
+                  onClick={handleCopy}
+                  className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2"
+                >
+                  {copied ? (
+                    <>
+                      <span className="text-moneteum text-lg">✓</span>
+                      Скопировано
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={18} />
+                      Скопировать фразу
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="bg-moneteum-light/50 border border-moneteum/20 rounded-2xl p-5 mb-6">
+                <p className="font-bold text-gray-900 text-sm mb-3 flex items-center gap-2">
+                  <ShieldCheck size={18} className="text-moneteum" />
+                  Рекомендации по хранению:
+                </p>
+                <ul className="text-xs text-gray-700 space-y-2 leading-relaxed pl-1">
+                  <li>✅ Запишите фразу на бумаге или в блокноте</li>
+                  <li>✅ Храните в сейфе или другом защищённом месте</li>
+                  <li>✅ Можете сделать несколько копий и хранить отдельно</li>
+                  <li>❌ Не храните в облаке, на почте или в заметках телефона</li>
+                  <li>❌ Не отправляйте фразу по SMS, email или мессенджерам</li>
+                </ul>
+              </div>
+
+              <button
+                onClick={handleContinue}
+                className="w-full bg-moneteum text-white py-4 rounded-xl font-bold text-base hover:bg-moneteum-dark transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02]"
+              >
+                Я сохранил фразу, продолжить
+              </button>
+            </>
+          ) : (
+            <div className="text-center text-red-600 p-4">
+              <p>Ошибка: мнемоническая фраза не получена</p>
+              <button
+                onClick={() => setStep('create')}
+                className="mt-4 px-6 py-2 bg-moneteum text-white rounded-xl"
+              >
+                Попробовать снова
+              </button>
             </div>
-
-            <button
-              onClick={handleCopy}
-              className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2"
-            >
-              {copied ? (
-                <>
-                  <span className="text-moneteum text-lg">✓</span>
-                  Скопировано
-                </>
-              ) : (
-                <>
-                  <Copy size={18} />
-                  Скопировать фразу
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="bg-moneteum-light/50 border border-moneteum/20 rounded-2xl p-5 mb-6">
-            <p className="font-bold text-gray-900 text-sm mb-3 flex items-center gap-2">
-              <ShieldCheck size={18} className="text-moneteum" />
-              Рекомендации по хранению:
-            </p>
-            <ul className="text-xs text-gray-700 space-y-2 leading-relaxed pl-1">
-              <li>✅ Запишите фразу на бумаге или в блокноте</li>
-              <li>✅ Храните в сейфе или другом защищённом месте</li>
-              <li>✅ Можете сделать несколько копий и хранить отдельно</li>
-              <li>❌ Не храните в облаке, на почте или в заметках телефона</li>
-              <li>❌ Не отправляйте фразу по SMS, email или мессенджерам</li>
-            </ul>
-          </div>
-
-          <label className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl mb-6 cursor-pointer hover:bg-gray-100 transition-colors">
-            <input
-              type="checkbox"
-              id="confirm"
-              className="mt-1 w-5 h-5 accent-moneteum cursor-pointer"
-            />
-            <span className="text-sm text-gray-700 leading-relaxed">
-              Я понимаю, что только я несу ответственность за сохранность фразы. 
-              При её потере доступ к кошельку будет невозможно восстановить.
-            </span>
-          </label>
-
-          <button
-            onClick={handleContinue}
-            disabled={loading}
-            className="w-full bg-moneteum text-white py-4 rounded-xl font-bold text-base hover:bg-moneteum-dark transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Создание кошелька...' : 'Я сохранил фразу, продолжить'}
-          </button>
+          )}
         </div>
       </div>
     </main>
   )
+}
+
+const handleCreate = async () => {
+  setStep('loading')
+  
+  try {
+    console.log('🚀 Starting wallet creation...')
+    
+    const response = await fetch('/api/wallet/create', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        telegramId: null,
+        username: 'user',
+        firstName: null,
+        lastName: null,
+        referredBy: null
+      })
+    })
+    
+    console.log('📡 Response status:', response.status)
+    console.log('📡 Response ok:', response.ok)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('❌ API Error:', errorText)
+      throw new Error('Failed to create wallet')
+    }
+    
+    const data = await response.json()
+    
+    console.log('📦 Received data:', data)
+    console.log('📦 Has mnemonic?', !!data.mnemonic)
+    console.log('📦 Mnemonic length:', data.mnemonic?.length)
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Wallet creation failed')
+    }
+    
+    if (!data.mnemonic) {
+      console.error('❌ Mnemonic is missing in response!')
+      throw new Error('Mnemonic not received from server')
+    }
+    
+    console.log('✅ Wallet created and saved:', data.userId)
+    
+    setWalletData({
+      userId: data.userId,
+      mnemonic: data.mnemonic,
+      address: data.address,
+      privateKey: data.privateKey,
+      cyberLogin: data.cyberLogin,
+      referralCode: data.referralCode
+    })
+    
+    console.log('✅ Step changing to: show')
+    setStep('show')
+    
+  } catch (error) {
+    console.error('❌ Error:', error)
+    alert('Ошибка при создании кошелька: ' + (error as Error).message)
+    setStep('create')
+  }
 }

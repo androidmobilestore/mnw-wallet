@@ -4,83 +4,88 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
+// Модель пользователя (под ваш проект с Telegram)
 model User {
-  id            String   @id @default(uuid())
-  telegramId    String?  @unique
-  cyberLogin    String   @unique
-  username      String?
-  firstName     String?
-  lastName      String?
-  
-  tronAddress   String   @unique
-  encryptedPrivateKey String
-  encryptedMnemonic   String
-  
-  balanceRUB    Float    @default(0)
-  
-  referralCode  String   @unique
-  referredBy    String?
-  referralBalance Float  @default(0)
-  
-  totalDeals    Int      @default(0)
-  totalVolume   Float    @default(0)
-  
-  isVerified    Boolean  @default(false)
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  transactions  Transaction[]
-  referrals     Referral[]
-  withdrawals   Withdrawal[]
+  id                   String        @id @default(cuid())
+  telegramId           String?       @unique
+  cyberLogin           String        @unique
+  username             String?
+  firstName            String?
+  lastName             String?
+  tronAddress          String        @unique
+  encryptedPrivateKey  String
+  encryptedMnemonic    String
+  referralCode         String        @unique
+  referredBy           String?
+  balanceRUB           Float         @default(0)
+  referralBalance      Float         @default(0)
+  totalDeals           Int           @default(0)
+  totalVolume          Float         @default(0)
+  isVerified           Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  // Связи
+  wallets              Wallet[]
+  transactions         Transaction[]
+  withdrawals          Withdrawal[]
+  referrals            User[]        @relation("Referrals")
+  referrer             User?         @relation("Referrals", fields: [referredBy], references: [referralCode], onDelete: SetNull)
 }
 
+// Модель кошелька
+model Wallet {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency     String
+  balance      Float         @default(0)
+  address      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  transactions Transaction[]
+  withdrawals  Withdrawal[]
+
+  @@unique([userId, currency])
+}
+
+// Модель транзакций
 model Transaction {
-  id            String   @id @default(uuid())
-  userId        String
-  type          String
-  currency      String
-  amount        Float
-  toAddress     String?
-  fromAddress   String?
-  status        String
-  txHash        String?
-  description   String?
-  
-  createdAt     DateTime @default(now())
-  
-  user          User     @relation(fields: [userId], references: [id])
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type        String
+  amount      Float
+  currency    String
+  status      String
+  description String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
-model Referral {
-  id            String   @id @default(uuid())
-  userId        String
-  referredUserId String
-  commission    Float    @default(0)
-  totalEarned   Float    @default(0)
-  
-  createdAt     DateTime @default(now())
-  
-  user          User     @relation(fields: [userId], references: [id])
-}
-
+// Модель заявок на вывод
 model Withdrawal {
-  id            String   @id @default(uuid())
-  userId        String
-  amount        Float
-  city          String
-  fullName      String
-  contactType   String
-  contact       String
-  token         String   @unique
-  operatorToken String
-  status        String   @default("pending")
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  user          User     @relation(fields: [userId], references: [id])
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  amount      Float
+  currency    String
+  status      String
+  token       String   @unique
+  city        String
+  fullName    String
+  contactType String
+  contact     String
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@noble/secp256k1": "^3.0.0",
     "@tronweb3/tronwallet-adapter-react-hooks": "^1.1.10",
     "@tronweb3/tronwallet-adapters": "^1.1.5",
     "@twa-dev/sdk": "^8.0.2",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
+    "@types/bip39": "^2.4.2",
     "@types/bs58": "^4.0.4",
     "@types/elliptic": "^6.4.18",
     "@types/hdkey": "^2.0.3",

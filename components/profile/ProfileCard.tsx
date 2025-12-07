@@ -16,6 +16,7 @@ export default function ProfileCard({ user }: ProfileCardProps) {
   const [verificationModal, setVerificationModal] = useState(false)
 
   const isVerified = user?.isVerified || false
+  const balanceRUB = user?.balanceRUB || 0
 
   const getUserLevel = () => {
     const deals = user?.totalDeals || 0
@@ -26,6 +27,15 @@ export default function ProfileCard({ user }: ProfileCardProps) {
   }
 
   const level = getUserLevel()
+
+  // ✅ Обработчик открытия модального окна вывода
+  const handleWithdrawClick = () => {
+    if (balanceRUB <= 0) {
+      alert('Недостаточно средств для вывода. Пополните баланс.')
+      return
+    }
+    setWithdrawModal(true)
+  }
 
   return (
     <>
@@ -150,30 +160,39 @@ export default function ProfileCard({ user }: ProfileCardProps) {
 
           {/* Кнопка вывода */}
           <button
-            onClick={() => setWithdrawModal(true)}
-            className="w-full bg-moneteum hover:bg-moneteum-dark text-white py-3 rounded-xl font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.02]"
+            onClick={handleWithdrawClick}
+            disabled={balanceRUB <= 0}
+            className={`w-full py-3 rounded-xl font-bold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg ${
+              balanceRUB > 0
+                ? 'bg-moneteum hover:bg-moneteum-dark text-white hover:shadow-xl hover:scale-[1.02]'
+                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+            }`}
           >
             <Banknote size={20} />
-            Вывести рубли
+            {balanceRUB > 0 ? 'Вывести рубли' : 'Недостаточно средств'}
           </button>
         </div>
       </div>
 
-      <WithdrawModal
-        isOpen={withdrawModal}
-        onClose={() => setWithdrawModal(false)}
-        balance={user?.balanceRUB || 0}
-      />
+      {/* ✅ Модальное окно открывается только при withdrawModal = true И балансе > 0 */}
+      {withdrawModal && balanceRUB > 0 && (
+        <WithdrawModal
+          onClose={() => setWithdrawModal(false)}
+          balance={balanceRUB}
+        />
+      )}
 
-      <NotificationsModal
-        isOpen={notificationsModal}
-        onClose={() => setNotificationsModal(false)}
-      />
+      {notificationsModal && (
+        <NotificationsModal
+          onClose={() => setNotificationsModal(false)}
+        />
+      )}
 
-      <VerificationModal
-        isOpen={verificationModal}
-        onClose={() => setVerificationModal(false)}
-      />
+      {verificationModal && (
+        <VerificationModal
+          onClose={() => setVerificationModal(false)}
+        />
+      )}
     </>
   )
 }

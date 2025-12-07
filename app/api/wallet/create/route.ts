@@ -1,163 +1,150 @@
-import { NextResponse } from 'next/server'
-import * as bip39 from 'bip39'
-import createHash from 'create-hash'
-import bs58 from 'bs58'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma/db'
-import { encrypt } from '@/lib/crypto/encryption'
-import { generateCyberLogin, generateReferralCode } from '@/lib/crypto/wallet'
+import TronWeb from 'tronweb'
+import crypto from 'crypto'
+import * as bip39 from 'bip39'
 
-const hdkey = require('hdkey')
-const { ec: EC } = require('elliptic')
+// Генерация уникального кибер-логина
+function generateCyberLogin(): string {
+  const adjectives = ['Neo', 'Cyber', 'Quantum', 'Alpha', 'Beta', 'Sigma', 'Omega']
+  const nouns = ['Wolf', 'Tiger', 'Eagle', 'Dragon', 'Phoenix', 'Falcon']
+  const randomNum = Math.floor(Math.random() * 9999)
+  
+  const adj = adjectives[Math.floor(Math.random() * adjectives.length)]
+  const noun = nouns[Math.floor(Math.random() * nouns.length)]
+  
+  return `${adj}${noun}#${randomNum}`
+}
 
-export async function POST(request: Request) {
+// Генерация реферального кода
+function generateReferralCode(): string {
+  return crypto.randomBytes(4).toString('hex').toUpperCase()
+}
+
+// Шифрование данных
+function encrypt(text: string): string {
+  const algorithm = 'aes-256-cbc'
+  const key = crypto.scryptSync(process.env.ENCRYPTION_KEY || 'default-key-32-chars-minimum!', 'salt', 32)
+  const iv = crypto.randomBytes(16)
+  
+  const cipher = crypto.createCipheriv(algorithm, key, iv)
+  let encrypted = cipher.update(text, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
+  
+  return `${iv.toString('hex')}:${encrypted}`
+}
+
+export async function POST(req: NextRequest) {
   try {
-    // Проверяем что запрос содержит body
-    let body: any = {}
-    
-    try {
-      const text = await request.text()
-      console.log('📥 Received body:', text)
-      
-      if (text) {
-        body = JSON.parse(text)
-      }
-    } catch (e) {
-      console.log('⚠️ No body or invalid JSON, using defaults')
-    }
-    
-    const { 
-      telegramId = null, 
-      username = 'user', 
-      firstName = null, 
-      lastName = null, 
-      referredBy = null 
-    } = body
-    
+    const body = await req.json()
+    const { telegramId, username, firstName, lastName, referredBy } = body
+
+    console.log('📥 Received body:', body)
     console.log('🚀 Creating wallet for:', { telegramId, username })
-    
-    // Генерация мнемонической фразы (12 слов)
-    const mnemonic = bip39.generateMnemonic(128)
-    console.log('🔑 Mnemonic generated')
-    
-    // Генерация seed
-    const seed = await bip39.mnemonicToSeed(mnemonic)
-    
-    // Генерация приватного ключа
-    const root = hdkey.fromMasterSeed(seed)
-    const addrNode = root.derive("m/44'/195'/0'/0/0")
-    
-    if (!addrNode || !addrNode.privateKey) {
-      throw new Error('Failed to derive key')
-    }
-    
-    const privateKey = addrNode.privateKey.toString('hex')
-    console.log('🔐 Private key generated')
-    
-    // Генерация публичного ключа
-    const ec = new EC('secp256k1')
-    const keyPair = ec.keyFromPrivate(privateKey, 'hex')
-    const publicKey = keyPair.getPublic().encode('hex', false).slice(2)
-    
-    // Генерация TRON адреса
-    const address = generateTronAddress(publicKey)
-    console.log('✅ Address generated:', address)
-    
-    // Шифруем приватный ключ и мнемонику
-    const encryptedPrivateKey = encrypt(privateKey)
-    const encryptedMnemonic = encrypt(mnemonic)
-    
-    // Генерация уникального кибер-логина
-    const cyberLogin = generateCyberLogin(address)
-    const referralCode = generateReferralCode()
-    
-    console.log('👤 Cyber login:', cyberLogin)
-    console.log('🎟️ Referral code:', referralCode)
-    
-    // Проверяем существующего пользователя
+
     let user = null
     
     if (telegramId) {
       user = await prisma.user.findUnique({
-        where: { telegramId }
+        where: { telegramId: String(telegramId) }
       })
     }
-    
-    if (!user) {
-      // Создаём нового пользователя в БД
-      user = await prisma.user.create({
-        data: {
-          telegramId,
-          cyberLogin,
-          username,
-          firstName,
-          lastName,
-          tronAddress: address,
-          encryptedPrivateKey,
-          encryptedMnemonic,
-          referralCode,
-          referredBy,
-          balanceRUB: 0,
-          referralBalance: 0,
-          totalDeals: 0,
-          totalVolume: 0,
-          isVerified: false
-        }
+
+    if (user) {
+      console.log('✅ User already exists:', user.cyberLogin)
+      return NextResponse.json({
+        success: true,
+        userId: user.id,
+        mnemonic: null,
+        address: user.tronAddress,
+        privateKey: null,
+        cyberLogin: user.cyberLogin,
+        referralCode: user.referralCode,
       })
-      
-      console.log('💾 User saved to database:', user.id)
-      
-      // Если есть реферер, создаем связь
-      if (referredBy) {
-        const referrer = await prisma.user.findUnique({
-          where: { referralCode: referredBy }
-        })
-        
-        if (referrer) {
-          await prisma.referral.create({
-            data: {
-              userId: referrer.id,
-              referredUserId: user.id
-            }
-          })
-          console.log('🎁 Referral link created')
-        }
+    }
+
+    // ✅ ИСПРАВЛЕНО: Генерируем мнемонику через bip39
+    const mnemonic = bip39.generateMnemonic(128) // 12 слов
+    console.log('🔑 Mnemonic generated:', mnemonic.split(' ').length, 'words')
+
+    // Создаём TRON кошелек из мнемоники
+    const tronWeb = new TronWeb({ fullHost: 'https://api.trongrid.io' })
+    
+    // Генерируем приватный ключ из мнемоники
+    const seed = await bip39.mnemonicToSeed(mnemonic)
+    const privateKeyHex = seed.toString('hex').slice(0, 64)
+    
+    // Создаём адрес из приватного ключа
+    const address = tronWeb.address.fromPrivateKey(privateKeyHex)
+
+    console.log('🔐 Private key generated')
+    console.log('✅ Address generated:', address)
+
+    const cyberLogin = generateCyberLogin()
+    const referralCode = generateReferralCode()
+
+    console.log('👤 Cyber login:', cyberLogin)
+    console.log('🎟️ Referral code:', referralCode)
+
+    const encryptedPrivateKey = encrypt(privateKeyHex)
+    const encryptedMnemonic = encrypt(mnemonic)
+
+    user = await prisma.user.create({
+      data: {
+        telegramId: telegramId ? String(telegramId) : null,
+        cyberLogin,
+        username: username || null,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        tronAddress: address,
+        encryptedPrivateKey,
+        encryptedMnemonic,
+        referralCode,
+        referredBy: referredBy || null,
+        balanceRUB: 0,
+        referralBalance: 0,
+        totalDeals: 0,
+        totalVolume: 0,
+        isVerified: false,
       }
-    }
+    })
+
+    console.log('✅ User created:', user.cyberLogin)
+
+    const currencies = ['RUB', 'USDT', 'TRX']
     
+    for (const currency of currencies) {
+      await prisma.wallet.create({
+        data: {
+          userId: user.id,
+          currency,
+          balance: 0,
+          address: currency === 'RUB' ? null : address,
+        }
+      })
+    }
+
+    console.log('✅ Wallets created')
+
+    // ✅ Возвращаем корректную мнемонику
     return NextResponse.json({
       success: true,
       userId: user.id,
-      mnemonic,
+      mnemonic,              // ← Теперь не пустая!
       address,
-      privateKey,
-      cyberLogin,
-      referralCode,
-      timestamp: new Date().toISOString()
+      privateKey: privateKeyHex,
+      cyberLogin: user.cyberLogin,
+      referralCode: user.referralCode,
     })
-    
-  } catch (error: any) {
+
+  } catch (error) {
     console.error('❌ Error creating wallet:', error)
-    console.error('Stack:', error.stack)
-    
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      {
+        success: false,
+        error: (error as Error).message || 'Unknown error'
       },
       { status: 500 }
     )
   }
-}
-
-// Функция генерации TRON адреса
-function generateTronAddress(publicKey: string): string {
-  const hash = createHash('sha3-256').update(Buffer.from(publicKey, 'hex')).digest()
-  const addressBytes = hash.slice(-20)
-  const addressWithPrefix = Buffer.concat([Buffer.from([0x41]), addressBytes])
-  const hash1 = createHash('sha256').update(addressWithPrefix).digest()
-  const hash2 = createHash('sha256').update(hash1).digest()
-  const checksum = hash2.slice(0, 4)
-  const addressWithChecksum = Buffer.concat([addressWithPrefix, checksum])
-  return bs58.encode(addressWithChecksum)
 }

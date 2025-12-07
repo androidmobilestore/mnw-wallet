@@ -4,7 +4,6 @@ import { X, Bell, MessageSquare, TrendingUp, Gift, DollarSign } from 'lucide-rea
 import { useState } from 'react'
 
 interface NotificationsModalProps {
-  isOpen: boolean
   onClose: () => void
 }
 
@@ -16,8 +15,6 @@ export default function NotificationsModal({ isOpen, onClose }: NotificationsMod
     withdrawals: false,
     news: true,
   })
-
-  if (!isOpen) return null
 
   const toggleNotification = (key: keyof typeof notifications) => {
     setNotifications(prev => ({ ...prev, [key]: !prev[key] }))

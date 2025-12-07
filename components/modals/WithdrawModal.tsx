@@ -1,110 +1,81 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { X, Banknote, MapPin, User, Phone, AlertCircle } from 'lucide-react'
 
 interface WithdrawModalProps {
-  isOpen: boolean
   onClose: () => void
   balance: number
 }
 
-export default function WithdrawModal({ isOpen, onClose, balance }: WithdrawModalProps) {
+export default function WithdrawModal({ onClose, balance }: WithdrawModalProps) {
   const [amount, setAmount] = useState('')
   const [city, setCity] = useState('moscow')
   const [fullName, setFullName] = useState('')
-  const [contact, setContact] = useState('')
   const [contactType, setContactType] = useState<'telegram' | 'phone'>('telegram')
+  const [contact, setContact] = useState('')
   const [error, setError] = useState('')
-
-  if (!isOpen) return null
-
-  const handleWithdraw = async () => {
-  setError('')
-
-  if (!amount || parseFloat(amount) <= 0) {
-    setError('Введите сумму')
-    return
-  }
-
-  if (parseFloat(amount) > balance) {
-    setError('Недостаточно средств')
-    return
-  }
-
-  if (!fullName) {
-    setError('Введите ФИО получателя')
-    return
-  }
-
-  if (!contact) {
-    setError('Введите контакт для связи')
-    return
-  }
-
-  try {
-    const response = await fetch('/api/withdrawal/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user?.id,
-        amount: parseFloat(amount),
-        city,
-        fullName,
-        contactType,
-        contact
-      })
-    })
-    
-    const data = await response.json()
-    
-    if (data.success) {
-      alert(`✅ Заявка создана!\n\nСумма: ${amount} ₽\nГород: ${cities.find(c => c.value === city)?.label}\nТокен получателя: ${data.withdrawal.token}\n\nСохраните этот токен для получения средств!`)
-      onClose()
-      window.location.reload()
-    } else {
-      setError(data.error || 'Ошибка создания заявки')
-    }
-  } catch (error: any) {
-    setError(error.message || 'Ошибка сети')
-  }
-}
-
-  // ... validation ...
-
-  try {
-    const response = await fetch('/api/withdrawal/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user.id,
-        amount: parseFloat(amount),
-        city,
-        fullName,
-        contactType,
-        contact
-      })
-    })
-    
-    const data = await response.json()
-    
-    if (data.success) {
-      alert(`✅ Заявка создана!\nСумма: ${amount} RUB\nТокен: ${data.withdrawal.token}`)
-      onClose()
-      window.location.reload()
-    } else {
-      setError(data.error)
-    }
-  } catch (error: any) {
-    setError(error.message)
-  }
-}
 
   const cities = [
     { value: 'moscow', label: 'Москва' },
-    { value: 'nnov', label: 'Нижний Новгород' },
-    { value: 'kaliningrad', label: 'Калининград' },
+    { value: 'spb', label: 'Санкт-Петербург' },
+    { value: 'kazan', label: 'Казань' },
+    { value: 'ekb', label: 'Екатеринбург' },
+    { value: 'nsk', label: 'Новосибирск' },
   ]
+
+  // ✅ ДОБАВЛЕНО async
+  const handleWithdraw = async () => {
+    setError('')
+
+    // Валидация
+    if (!amount || parseFloat(amount) <= 0) {
+      setError('Введите корректную сумму')
+      return
+    }
+
+    if (parseFloat(amount) > balance) {
+      setError('Недостаточно средств на балансе')
+      return
+    }
+
+    if (!fullName.trim()) {
+      setError('Введите ФИО получателя')
+      return
+    }
+
+    if (!contact.trim()) {
+      setError('Введите контакт для связи')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/withdrawal/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+          currency: 'RUB',
+          city,
+          fullName,
+          contactType,
+          contact,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        alert(`✅ Заявка создана!\nСумма: ${amount} RUB\nТокен: ${data.withdrawal.token}`)
+        onClose()
+      } else {
+        setError(data.error || 'Ошибка при создании заявки')
+      }
+    } catch (err) {
+      console.error('Withdrawal error:', err)
+      setError('Ошибка соединения с сервером')
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4 overflow-y-auto py-8">

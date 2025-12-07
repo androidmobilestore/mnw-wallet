@@ -1,85 +1,115 @@
-import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma/db'
-import { randomBytes } from 'crypto'
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
-export async function POST(request: Request) {
+// Генерация уникального токена вывода
+function generateWithdrawalToken(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let token = ''
+  for (let i = 0; i < 8; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return token
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const { userId, amount, city, fullName, contactType, contact } = await request.json()
+    const session = await getServerSession(authOptions)
     
-    if (!userId || !amount || !city || !fullName || !contact) {
+    if (!session || !session.user?.email) {
       return NextResponse.json(
-        { success: false, error: 'Отсутствуют обязательные поля' },
+        { success: false, error: 'Необходима авторизация' },
+        { status: 401 }
+      )
+    }
+
+    const body = await req.json()
+    const { amount, currency, city, fullName, contactType, contact } = body
+
+    // Валидация
+    if (!amount || amount <= 0) {
+      return NextResponse.json(
+        { success: false, error: 'Некорректная сумма' },
         { status: 400 }
       )
     }
-    
-    console.log('💸 Creating withdrawal request...')
-    
-    // Проверяем пользователя
+
+    if (!city || !fullName || !contactType || !contact) {
+      return NextResponse.json(
+        { success: false, error: 'Заполните все поля' },
+        { status: 400 }
+      )
+    }
+
+    // Находим пользователя
     const user = await prisma.user.findUnique({
-      where: { id: userId }
+      where: { email: session.user.email },
+      include: { wallets: true }
     })
-    
+
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'Пользователь не найден' },
         { status: 404 }
       )
     }
-    
-    // Проверяем баланс
-    if (user.balanceRUB < amount) {
+
+    // Находим кошелек с нужной валютой
+    const wallet = user.wallets.find(w => w.currency === currency)
+
+    if (!wallet) {
       return NextResponse.json(
-        { success: false, error: 'Недостаточно средств на балансе' },
+        { success: false, error: 'Кошелек не найден' },
+        { status: 404 }
+      )
+    }
+
+    // Проверяем баланс
+    if (wallet.balance < amount) {
+      return NextResponse.json(
+        { success: false, error: 'Недостаточно средств' },
         { status: 400 }
       )
     }
-    
-    // Генерация токенов (8 символов)
-    const token = randomBytes(4).toString('hex').toUpperCase()
-    const operatorToken = randomBytes(4).toString('hex').toUpperCase()
-    
-    // Создаём заявку
+
+    // Создаем заявку на вывод
     const withdrawal = await prisma.withdrawal.create({
       data: {
-        userId,
+        userId: user.id,
+        walletId: wallet.id,
         amount,
+        currency,
+        status: 'PENDING',
+        token: generateWithdrawalToken(),
         city,
         fullName,
         contactType,
         contact,
-        token,
-        operatorToken,
-        status: 'pending'
       }
     })
-    
-    // Вычитаем средства из баланса
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        balanceRUB: user.balanceRUB - amount
-      }
+
+    // Замораживаем средства на балансе
+    await prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: wallet.balance - amount }
     })
-    
-    console.log('✅ Withdrawal created:', withdrawal.id)
-    
+
     return NextResponse.json({
       success: true,
       withdrawal: {
         id: withdrawal.id,
-        amount: withdrawal.amount,
-        city: withdrawal.city,
         token: withdrawal.token,
+        amount: withdrawal.amount,
+        currency: withdrawal.currency,
         status: withdrawal.status,
-        createdAt: withdrawal.createdAt
       }
     })
-    
-  } catch (error: any) {
-    console.error('❌ Error creating withdrawal:', error)
+
+  } catch (error) {
+    console.error('Withdrawal creation error:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Ошибка сервера' },
       { status: 500 }
     )
   }
