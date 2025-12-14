@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getRates } from '@/lib/rates/ratesService'
+import { getRates, forceUpdateRates } from '@/lib/rates/ratesService'
 
 export async function GET() {
   try {
-    const rates = getRates()
+    // Принудительно обновляем курсы при каждом запросе
+    const rates = await forceUpdateRates()
     
     return NextResponse.json({
       success: true,

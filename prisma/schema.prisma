@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -87,6 +87,8 @@ model Withdrawal {
   contactType String   // telegram or phone
   contact     String
   notes       String?
+  adminId     String?
+  completedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -106,6 +108,9 @@ model Admin {
 
   // Связь с обработанными заявками
   exchanges   Exchange[]
+
+  // Связь с выданными админскими ссылками
+  linkTokens  AdminLinkToken[]
 }
 
 // ✅ НОВАЯ МОДЕЛЬ: Обмены валют
@@ -150,4 +155,20 @@ model Exchange {
   @@index([userId])
   @@index([status])
   @@index([type])
+}
+
+// ✅ Токены доступа для админских ссылок из Telegram
+model AdminLinkToken {
+  id           String   @id @default(cuid())
+  token        String   @unique
+  adminId      String
+  admin        Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  resourceType String   // EXCHANGE, WITHDRAWAL
+  resourceId   String
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([resourceType, resourceId])
 }

@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import { BalanceUpdateProvider } from '@/contexts/BalanceUpdateContext'
 
 export const metadata: Metadata = {
   title: 'МОНЕТУМ.РФ — Криптовалютный кошелёк',
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className="antialiased">
-        {children}
+        <BalanceUpdateProvider>
+          {children}
+        </BalanceUpdateProvider>
       </body>
     </html>
   )

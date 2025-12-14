@@ -1,11 +1,21 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowDownUp, ArrowUpRight, RefreshCw } from 'lucide-react'
+import { ArrowDownUp, ArrowUpRight, ArrowDownLeft, RefreshCw, Send } from 'lucide-react'
+import { useBalanceUpdate } from '@/contexts/BalanceUpdateContext'
 import ExchangeModal from '@/components/modals/ExchangeModal'
+import ReceiveModal from '@/components/modals/ReceiveModal'
+import UnifiedSendModal from '@/components/modals/UnifiedSendModal'
+
+interface User {
+  id: string
+  tronAddress: string
+  cyberLogin: string
+  encryptedPrivateKey?: string
+}
 
 interface WalletCardProps {
-  user: any
+  user: User
 }
 
 export default function WalletCard({ user }: WalletCardProps) {
@@ -16,37 +26,53 @@ export default function WalletCard({ user }: WalletCardProps) {
   })
   const [rates, setRates] = useState({
     USDT_TO_RUB: 80,
+    RUB_TO_USDT: 0.0125,
     TRX_TO_RUB: 21.5
   })
   const [loading, setLoading] = useState(true)
   const [exchangeModalOpen, setExchangeModalOpen] = useState(false)
+  const [receiveModalOpen, setReceiveModalOpen] = useState(false)
+  const [sendModalOpen, setSendModalOpen] = useState(false)
+  const { lastBalanceUpdate } = useBalanceUpdate()
 
   useEffect(() => {
     if (user?.id) {
       loadBalances()
       loadRates()
       
-      // Обновляем курсы каждые 30 секунд
-      const interval = setInterval(loadRates, 30000)
+      // Обновляем балансы и курсы каждые 30 секунд
+      const interval = setInterval(() => {
+        loadBalances()
+        loadRates()
+      }, 30000)
       return () => clearInterval(interval)
     }
-  }, [user])
+  }, [user, lastBalanceUpdate])
 
   const loadBalances = async () => {
-    setLoading(true)
+    // Only show loading indicator for initial load
+    const isFirstLoad = loading;
+    if (isFirstLoad) {
+      setLoading(true);
+    }
+    
     try {
       const response = await fetch(`/api/wallet/balance?userId=${user.id}`)
       
       if (!response.ok) {
         console.error('Failed to fetch balances:', response.status)
-        setLoading(false)
+        if (isFirstLoad) {
+          setLoading(false);
+        }
         return
       }
 
       const text = await response.text()
       if (!text) {
         console.error('Empty response from server')
-        setLoading(false)
+        if (isFirstLoad) {
+          setLoading(false);
+        }
         return
       }
 
@@ -62,7 +88,9 @@ export default function WalletCard({ user }: WalletCardProps) {
     } catch (error) {
       console.error('Error loading balances:', error)
     } finally {
-      setLoading(false)
+      if (isFirstLoad) {
+        setLoading(false);
+      }
     }
   }
 
@@ -74,6 +102,7 @@ export default function WalletCard({ user }: WalletCardProps) {
       if (data.success) {
         setRates({
           USDT_TO_RUB: data.rates.USDT_TO_RUB,
+          RUB_TO_USDT: data.rates.RUB_TO_USDT,
           TRX_TO_RUB: data.rates.TRX_TO_RUB
         })
       }
@@ -90,59 +119,77 @@ export default function WalletCard({ user }: WalletCardProps) {
 
   return (
     <>
-      <div className="bg-gradient-to-br from-moneteum to-moneteum-dark rounded-2xl p-6 relative overflow-hidden">
+      <div className="bg-white border border-moneteum/20 rounded-2xl p-6 relative overflow-hidden shadow-sm">
         {/* Декоративные элементы */}
-        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+        <div className="absolute top-0 right-0 w-40 h-40 bg-moneteum/5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-moneteum/5 rounded-full blur-2xl"></div>
 
         <div className="relative z-10">
           {/* Заголовок */}
           <div className="flex items-center justify-between mb-2">
-            <p className="text-white/80 text-sm">Общий баланс</p>
+            <p className="text-moneteum/80 text-sm font-medium">Общий баланс</p>
             <button
               onClick={() => {
                 loadBalances()
                 loadRates()
               }}
               disabled={loading}
-              className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50"
+              className="w-8 h-8 bg-moneteum/10 hover:bg-moneteum/20 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50"
             >
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={loading ? 'animate-spin text-moneteum' : 'text-moneteum'} />
             </button>
           </div>
 
-          <h2 className="text-white text-4xl font-black mb-6">
+          <h2 className="text-moneteum text-4xl font-black mb-6">
             {loading ? '---' : totalInRUB.toFixed(2)} ₽
           </h2>
 
           {/* Балансы по валютам */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             {/* RUB */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/20">
-              <p className="text-white/70 text-xs mb-1">₽ RUB</p>
-              <p className="text-white text-xl font-bold">
+            <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">₽</span>
+                </div>
+                <p className="text-gray-600 text-sm font-semibold">RUB</p>
+              </div>
+              <p className="text-gray-900 text-xl font-bold">
                 {loading ? '---' : balances.RUB.toFixed(2)}
+              </p>
+              <p className="text-gray-400 text-xs mt-1">
+                ≈ {(balances.RUB * rates.RUB_TO_USDT).toFixed(2)} $
               </p>
             </div>
 
             {/* USDT */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/20">
-              <p className="text-white/70 text-xs mb-1">$ USDT</p>
-              <p className="text-white text-xl font-bold">
+            <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">$</span>
+                </div>
+                <p className="text-gray-600 text-sm font-semibold">USDT</p>
+              </div>
+              <p className="text-gray-900 text-xl font-bold">
                 {loading ? '---' : balances.USDT.toFixed(2)}
               </p>
-              <p className="text-white/50 text-xs mt-1">
+              <p className="text-gray-400 text-xs mt-1">
                 ≈ {(balances.USDT * rates.USDT_TO_RUB).toFixed(2)} ₽
               </p>
             </div>
 
             {/* TRX */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/20">
-              <p className="text-white/70 text-xs mb-1">□ TRX</p>
-              <p className="text-white text-xl font-bold">
+            <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">T</span>
+                </div>
+                <p className="text-gray-600 text-sm font-semibold">TRX</p>
+              </div>
+              <p className="text-gray-900 text-xl font-bold">
                 {loading ? '---' : balances.TRX.toFixed(2)}
               </p>
-              <p className="text-white/50 text-xs mt-1">
+              <p className="text-gray-400 text-xs mt-1">
                 ≈ {(balances.TRX * rates.TRX_TO_RUB).toFixed(2)} ₽
               </p>
             </div>
@@ -152,26 +199,40 @@ export default function WalletCard({ user }: WalletCardProps) {
           <div className="grid grid-cols-2 gap-3 mb-6">
             <button
               onClick={() => setExchangeModalOpen(true)}
-              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 text-white py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+              className="bg-moneteum/10 hover:bg-moneteum/20 border border-moneteum/20 text-moneteum py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
             >
               <ArrowDownUp size={20} />
               Обменять
             </button>
 
-            <button className="bg-white hover:bg-white/90 text-moneteum py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2">
+            <button
+              onClick={() => setReceiveModalOpen(true)}
+              className="bg-moneteum hover:bg-moneteum-dark text-white py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-sm"
+            >
               Пополнить
               <ArrowUpRight size={20} />
             </button>
           </div>
 
+          {/* Кнопки отправки */}
+          <div className="mb-6">
+            <button
+              onClick={() => setSendModalOpen(true)}
+              className="w-full bg-gray-800 hover:bg-black text-white py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-sm"
+            >
+              Отправить средства
+              <Send size={20} />
+            </button>
+          </div>
+
           {/* TRON адрес */}
           <div>
-            <p className="text-white/70 text-xs mb-2">TRON адрес:</p>
+            <p className="text-gray-500 text-xs mb-2">TRON адрес:</p>
             <div className="relative">
               <input
                 readOnly
                 value={user?.tronAddress || ''}
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white font-mono text-sm cursor-pointer select-all focus:outline-none focus:border-white/40"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 font-mono text-sm cursor-pointer select-all focus:outline-none focus:border-moneteum focus:ring-1 focus:ring-moneteum"
                 onClick={(e) => (e.target as HTMLInputElement).select()}
               />
               <button
@@ -181,7 +242,7 @@ export default function WalletCard({ user }: WalletCardProps) {
                     alert('✅ Адрес скопирован!')
                   }
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-moneteum transition"
                 aria-label="Копировать адрес"
               >
                 📋
@@ -194,11 +255,34 @@ export default function WalletCard({ user }: WalletCardProps) {
       {/* Модальное окно обмена */}
       {exchangeModalOpen && (
         <ExchangeModal
+          isOpen={exchangeModalOpen}
           onClose={() => setExchangeModalOpen(false)}
-          userId={user.id}
-          usdtBalance={balances.USDT}
-          rubBalance={balances.RUB}
-          currentRate={rates.USDT_TO_RUB}
+          userBalance={{
+            USDT: balances.USDT,
+            TRX: balances.TRX,
+            RUB: balances.RUB
+          }}
+        />
+      )}
+      
+      {/* Модальное окно пополнения */}
+      {receiveModalOpen && (
+        <ReceiveModal
+          isOpen={receiveModalOpen}
+          onClose={() => setReceiveModalOpen(false)}
+          currency="TRX"
+          address={user?.tronAddress || ''}
+          cyberLogin={user?.cyberLogin || ''}
+        />
+      )}
+      
+      {/* Модальное окно отправки */}
+      {sendModalOpen && (
+        <UnifiedSendModal
+          isOpen={sendModalOpen}
+          onClose={() => setSendModalOpen(false)}
+          user={user}
+          balances={balances}
         />
       )}
     </>

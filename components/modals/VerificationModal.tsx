@@ -6,7 +6,7 @@ interface VerificationModalProps {
   onClose: () => void
 }
 
-export default function VerificationModal({ isOpen, onClose }: VerificationModalProps) {
+export default function VerificationModal({ onClose }: VerificationModalProps) {
 
   const offices = [
     {
@@ -28,12 +28,12 @@ export default function VerificationModal({ isOpen, onClose }: VerificationModal
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto shadow-xl">
         <button
           onClick={onClose}
           className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <X size={20} />
+          <X size={20} className="text-gray-600" />
         </button>
 
         <div className="mb-6">

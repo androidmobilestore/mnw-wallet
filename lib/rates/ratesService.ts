@@ -26,7 +26,9 @@ async function fetchRates(): Promise<ExchangeRates | null> {
   try {
     console.log('📡 Fetching rates from API...')
     
-    const response = await fetch(RATES_API_URL, {
+    // Используем прокси через наш сервер для обхода CORS
+    const proxyUrl = 'http://localhost:3000/api/rates-proxy'
+    const response = await fetch(proxyUrl, {
       cache: 'no-store',
       headers: {
         'User-Agent': 'Mozilla/5.0'

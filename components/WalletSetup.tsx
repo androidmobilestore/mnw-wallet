@@ -15,7 +15,7 @@ interface WalletSetupProps {
 }
 
 export default function WalletSetup({ onComplete }: WalletSetupProps) {
-  const [step, setStep] = useState<'create' | 'loading' | 'show'>('create')
+  const [step, setStep] = useState<'create' | 'restore' | 'loading' | 'show'>('create')
   const [copied, setCopied] = useState(false)
   const [walletData, setWalletData] = useState<{
     userId: string
@@ -25,6 +25,8 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
     cyberLogin: string
     referralCode: string
   } | null>(null)
+  const [mnemonicInput, setMnemonicInput] = useState('')
+  const [restoreError, setRestoreError] = useState('')
 
   const handleCreate = async () => {
     setStep('loading')
@@ -34,7 +36,7 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
       
       const response = await fetch('/api/wallet/create', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
@@ -85,6 +87,76 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
     }
   }
 
+  const handleRestore = async () => {
+    setRestoreError('')
+    setStep('loading')
+    
+    try {
+      console.log('🚀 Starting wallet restoration...')
+      
+      const response = await fetch('/api/wallet/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          mnemonic: mnemonicInput.trim()
+        })
+      })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('API Error:', errorText)
+        throw new Error('Failed to restore wallet')
+      }
+      
+      const data = await response.json()
+      
+      console.log('📦 Received restore data:', data)
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Wallet restoration failed')
+      }
+      
+      console.log('✅ Wallet restored:', data.userId)
+      
+      // For restored wallets, we don't have the mnemonic or private key in the response
+      setWalletData({
+        userId: data.userId,
+        mnemonic: '',
+        address: data.address,
+        privateKey: '',
+        cyberLogin: data.cyberLogin,
+        referralCode: data.referralCode
+      })
+      
+      // Skip the mnemonic display step for restored wallets
+      if (data.userId) {
+        localStorage.setItem('user', JSON.stringify({
+          userId: data.userId,
+          cyberLogin: data.cyberLogin,
+          tronAddress: data.address,
+          referralCode: data.referralCode
+        }))
+        
+        onComplete(
+          data.userId,
+          '', // No mnemonic for restored wallet
+          data.address,
+          '', // No private key for restored wallet
+          data.cyberLogin,
+          data.referralCode
+        )
+      }
+      
+    } catch (error) {
+      console.error('❌ Error:', error)
+      setRestoreError('Ошибка при восстановлении кошелька: ' + (error as Error).message)
+      setStep('restore')
+    }
+  }
+
   const handleCopy = () => {
     if (walletData?.mnemonic) {
       navigator.clipboard.writeText(walletData.mnemonic)
@@ -117,9 +189,9 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-moneteum-light/30 px-4">
         <div className="max-w-md w-full">
-          <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-200">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
             <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-moneteum to-moneteum-dark rounded-2xl flex items-center justify-center shadow-lg">
+              <div className="w-20 h-20 bg-moneteum rounded-2xl flex items-center justify-center shadow-lg">
                 <KeyRound size={40} className="text-white" strokeWidth={2} />
               </div>
             </div>
@@ -163,6 +235,15 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
             >
               Создать кошелёк
             </button>
+
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setStep('restore')}
+                className="text-moneteum hover:text-moneteum-dark text-sm font-medium underline"
+              >
+                Восстановить кошелёк из фразы
+              </button>
+            </div>
           </div>
         </div>
       </main>
@@ -173,9 +254,9 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-moneteum-light/30 px-4">
         <div className="max-w-md w-full">
-          <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-200 text-center">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200 text-center">
             <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-moneteum to-moneteum-dark rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
+              <div className="w-20 h-20 bg-moneteum rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
                 <KeyRound size={40} className="text-white" strokeWidth={2} />
               </div>
             </div>
@@ -191,14 +272,75 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
     )
   }
 
+  if (step === 'restore') {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-moneteum-light/30 px-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+            <div className="flex justify-center mb-6">
+              <div className="w-20 h-20 bg-moneteum rounded-2xl flex items-center justify-center shadow-lg">
+                <KeyRound size={40} className="text-white" strokeWidth={2} />
+              </div>
+            </div>
+
+            <h1 className="text-3xl font-bold text-center text-gray-900 mb-3">
+              Восстановление кошелька
+            </h1>
+            <p className="text-center text-gray-600 text-sm mb-6">
+              Введите вашу секретную фразу из 12 слов
+            </p>
+
+            {restoreError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                <p className="text-red-700 text-sm">{restoreError}</p>
+              </div>
+            )}
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Секретная фраза
+              </label>
+              <textarea
+                value={mnemonicInput}
+                onChange={(e) => setMnemonicInput(e.target.value)}
+                placeholder="Введите 12 слов вашей секретной фразы через пробел"
+                className="w-full h-24 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-moneteum focus:border-moneteum resize-none text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Введите слова в правильном порядке, разделенные пробелами
+              </p>
+            </div>
+
+            <button
+              onClick={handleRestore}
+              disabled={!mnemonicInput.trim() || mnemonicInput.split(' ').length < 12}
+              className="w-full bg-moneteum text-white py-4 rounded-xl font-bold text-base hover:bg-moneteum-dark transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              Восстановить кошелёк
+            </button>
+
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setStep('create')}
+                className="text-moneteum hover:text-moneteum-dark text-sm font-medium underline"
+              >
+                Создать новый кошелёк
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   const mnemonicWords = walletData?.mnemonic ? walletData.mnemonic.split(' ') : []
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-moneteum-light/30 px-4 py-8">
       <div className="max-w-2xl w-full">
-        <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-200">
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl mb-4 shadow-lg">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-moneteum rounded-2xl mb-4 shadow-lg">
               <span className="text-3xl">🔑</span>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -228,17 +370,17 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
 
           {mnemonicWords.length > 0 ? (
             <>
-              <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 mb-6">
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 mb-6">
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   {mnemonicWords.map((word, index) => (
                     <div
                       key={index}
-                      className="bg-white/10 border border-white/20 rounded-xl p-3 flex items-center gap-3"
+                      className="bg-white border border-gray-200 rounded-xl p-3 flex items-center gap-3"
                     >
-                      <span className="text-white/50 font-bold text-sm w-6">
+                      <span className="text-gray-500 font-bold text-sm w-6">
                         {index + 1}.
                       </span>
-                      <span className="text-white font-mono font-semibold text-sm">
+                      <span className="text-gray-900 font-mono font-semibold text-sm">
                         {word}
                       </span>
                     </div>
@@ -247,16 +389,16 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
 
                 <button
                   onClick={handleCopy}
-                  className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2"
+                  className="w-full bg-moneteum hover:bg-moneteum-dark border border-moneteum/20 text-white py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
                 >
                   {copied ? (
                     <>
-                      <span className="text-moneteum text-lg">✓</span>
+                      <span className="text-white text-lg">✓</span>
                       Скопировано
                     </>
                   ) : (
                     <>
-                      <Copy size={18} />
+                      <Copy size={18} className="text-white" />
                       Скопировать фразу
                     </>
                   )}
@@ -299,70 +441,4 @@ export default function WalletSetup({ onComplete }: WalletSetupProps) {
       </div>
     </main>
   )
-}
-
-const handleCreate = async () => {
-  setStep('loading')
-  
-  try {
-    console.log('🚀 Starting wallet creation...')
-    
-    const response = await fetch('/api/wallet/create', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        telegramId: null,
-        username: 'user',
-        firstName: null,
-        lastName: null,
-        referredBy: null
-      })
-    })
-    
-    console.log('📡 Response status:', response.status)
-    console.log('📡 Response ok:', response.ok)
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ API Error:', errorText)
-      throw new Error('Failed to create wallet')
-    }
-    
-    const data = await response.json()
-    
-    console.log('📦 Received data:', data)
-    console.log('📦 Has mnemonic?', !!data.mnemonic)
-    console.log('📦 Mnemonic length:', data.mnemonic?.length)
-    
-    if (!data.success) {
-      throw new Error(data.error || 'Wallet creation failed')
-    }
-    
-    if (!data.mnemonic) {
-      console.error('❌ Mnemonic is missing in response!')
-      throw new Error('Mnemonic not received from server')
-    }
-    
-    console.log('✅ Wallet created and saved:', data.userId)
-    
-    setWalletData({
-      userId: data.userId,
-      mnemonic: data.mnemonic,
-      address: data.address,
-      privateKey: data.privateKey,
-      cyberLogin: data.cyberLogin,
-      referralCode: data.referralCode
-    })
-    
-    console.log('✅ Step changing to: show')
-    setStep('show')
-    
-  } catch (error) {
-    console.error('❌ Error:', error)
-    alert('Ошибка при создании кошелька: ' + (error as Error).message)
-    setStep('create')
-  }
 }

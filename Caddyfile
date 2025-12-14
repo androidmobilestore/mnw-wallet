@@ -1,0 +1,5 @@
+admin.monetum.in {
+  encode gzip
+
+  reverse_proxy web:3000
+}

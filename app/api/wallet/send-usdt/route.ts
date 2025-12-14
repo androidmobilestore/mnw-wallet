@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma/db'
+import { decrypt } from '@/lib/crypto/encryption'
+import TronWeb from 'tronweb'
 
 const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
 
 export async function POST(request: Request) {
   try {
-    const { privateKey, toAddress, amount } = await request.json()
+    const { userId, toAddress, amount } = await request.json()
     
-    if (!privateKey || !toAddress || !amount) {
+    if (!userId || !toAddress || !amount) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -14,12 +17,30 @@ export async function POST(request: Request) {
     }
     
     console.log('🚀 Sending USDT...')
+    console.log('User ID:', userId)
     console.log('To:', toAddress)
     console.log('Amount:', amount)
     
-    const TronWeb = require('tronweb')
+    // Get user with encrypted private key
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        encryptedPrivateKey: true,
+        tronAddress: true
+      }
+    })
     
-    const tronWeb = new TronWeb({
+    if (!user || !user.encryptedPrivateKey) {
+      return NextResponse.json(
+        { success: false, error: 'User or private key not found' },
+        { status: 404 }
+      )
+    }
+    
+    // Decrypt the private key
+    const privateKey = decrypt(user.encryptedPrivateKey)
+    
+    const tronWeb = new (TronWeb as any).TronWeb({
       fullHost: 'https://api.trongrid.io',
     })
     
@@ -42,7 +63,7 @@ export async function POST(request: Request) {
     
     // Проверяем баланс USDT
     const balance = await contract.balanceOf(fromAddress).call()
-    const balanceInUSDT = balance / 1_000_000
+    const balanceInUSDT = Number(balance) / 1_000_000
     
     console.log('USDT Balance:', balanceInUSDT)
     
@@ -93,12 +114,12 @@ export async function POST(request: Request) {
       explorerUrl: `https://tronscan.org/#/transaction/${transaction}`
     })
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error sending USDT:', error)
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || 'Failed to send USDT' 
+        error: (error as Error).message || 'Failed to send USDT' 
       },
       { status: 500 }
     )

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma/db'
 
 // Генерация уникального токена вывода
 function generateWithdrawalToken(): string {
@@ -15,19 +13,17 @@ function generateWithdrawalToken(): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session || !session.user?.email) {
+    const body = await req.json()
+    const { userId, amount, currency, city, fullName, contactType, contact } = body
+
+    // Валидация
+    if (!userId) {
       return NextResponse.json(
-        { success: false, error: 'Необходима авторизация' },
-        { status: 401 }
+        { success: false, error: 'userId is required' },
+        { status: 400 }
       )
     }
 
-    const body = await req.json()
-    const { amount, currency, city, fullName, contactType, contact } = body
-
-    // Валидация
     if (!amount || amount <= 0) {
       return NextResponse.json(
         { success: false, error: 'Некорректная сумма' },
@@ -44,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     // Находим пользователя
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: userId },
       include: { wallets: true }
     })
 
@@ -52,6 +48,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Пользователь не найден' },
         { status: 404 }
+      )
+    }
+
+    // Проверяем, что вывод только в RUB
+    if (currency !== 'RUB') {
+      return NextResponse.json(
+        { success: false, error: 'Вывод возможен только в RUB' },
+        { status: 400 }
       )
     }
 
@@ -65,44 +69,59 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Проверяем баланс
-    if (wallet.balance < amount) {
+    const result = await prisma.$transaction(async (tx) => {
+      // Проверяем актуальный баланс в транзакции
+      const currentWallet = await tx.wallet.findUnique({
+        where: { id: wallet.id }
+      })
+
+      if (!currentWallet) {
+        return { ok: false as const, error: 'Кошелек не найден' }
+      }
+
+      if (currentWallet.balance < amount) {
+        return { ok: false as const, error: 'Недостаточно средств' }
+      }
+
+      const withdrawal = await tx.withdrawal.create({
+        data: {
+          userId: user.id,
+          walletId: wallet.id,
+          amount,
+          currency,
+          status: 'PENDING',
+          token: generateWithdrawalToken(),
+          city,
+          fullName,
+          contactType,
+          contact,
+        }
+      })
+
+      // Замораживаем средства на балансе
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { decrement: amount } }
+      })
+
+      return { ok: true as const, withdrawal }
+    })
+
+    if (!result.ok) {
       return NextResponse.json(
-        { success: false, error: 'Недостаточно средств' },
+        { success: false, error: result.error },
         { status: 400 }
       )
     }
 
-    // Создаем заявку на вывод
-    const withdrawal = await prisma.withdrawal.create({
-      data: {
-        userId: user.id,
-        walletId: wallet.id,
-        amount,
-        currency,
-        status: 'PENDING',
-        token: generateWithdrawalToken(),
-        city,
-        fullName,
-        contactType,
-        contact,
-      }
-    })
-
-    // Замораживаем средства на балансе
-    await prisma.wallet.update({
-      where: { id: wallet.id },
-      data: { balance: wallet.balance - amount }
-    })
-
     return NextResponse.json({
       success: true,
       withdrawal: {
-        id: withdrawal.id,
-        token: withdrawal.token,
-        amount: withdrawal.amount,
-        currency: withdrawal.currency,
-        status: withdrawal.status,
+        id: result.withdrawal.id,
+        token: result.withdrawal.token,
+        amount: result.withdrawal.amount,
+        currency: result.withdrawal.currency,
+        status: result.withdrawal.status,
       }
     })
 

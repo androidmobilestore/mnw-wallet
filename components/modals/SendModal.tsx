@@ -9,9 +9,10 @@ interface SendModalProps {
   currency: 'TRX' | 'USDT' | 'RUB'
   balance: number
   privateKey?: string
+  userId?: string
 }
 
-export default function SendModal({ isOpen, onClose, currency, balance, privateKey }: SendModalProps) {
+export default function SendModal({ isOpen, onClose, currency, balance, privateKey, userId }: SendModalProps) {
   const [recipient, setRecipient] = useState('')
   const [amount, setAmount] = useState('')
   const [error, setError] = useState('')
@@ -22,15 +23,15 @@ export default function SendModal({ isOpen, onClose, currency, balance, privateK
   if (!isOpen) return null
 
   const isCrypto = currency === 'TRX' || currency === 'USDT'
-  const placeholderText = isCrypto 
-    ? 'TXYZpkJ5QD5GHRUuJPNK9...' 
-    : 'MegaTron#2124'
+  const placeholderText = isCrypto
+    ? 'TXYZpkJ5QD5GHRUuJPNK9...'
+    : 'user#1234'
 
   const handleSend = async () => {
     setError('')
     
     if (!recipient) {
-      setError(isCrypto ? 'Введите адрес кошелька' : 'Введите ID получателя')
+      setError(isCrypto ? 'Введите адрес кошелька' : 'Введите логин получателя')
       return
     }
     
@@ -50,7 +51,7 @@ export default function SendModal({ isOpen, onClose, currency, balance, privateK
     }
 
     if (!isCrypto && !recipient.includes('#')) {
-      setError('Неверный формат ID (например: MegaTron#2124)')
+      setError('Неверный формат ID (например: user#1234)')
       return
     }
 
@@ -91,28 +92,54 @@ export default function SendModal({ isOpen, onClose, currency, balance, privateK
         } else {
           setError(data.error || 'Ошибка отправки')
         }
-      } catch (err: any) {
-        setError(err.message || 'Ошибка сети')
+      } catch (err) {
+        setError((err as Error).message || 'Ошибка сети')
       } finally {
         setLoading(false)
       }
     } else {
       // Для рублей (внутренние переводы)
-      alert(`Отправка ${amount} RUB на ${recipient}\nФункция в разработке`)
-      onClose()
+      setLoading(true)
+      try {
+        const response = await fetch('/api/wallet/transfer-rub', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromUserId: userId,
+            toCyberLogin: recipient,
+            amount: parseFloat(amount)
+          })
+        })
+        
+        const data = await response.json()
+        
+        if (data.success) {
+          setSuccess(true)
+          setTimeout(() => {
+            onClose()
+            window.location.reload()
+          }, 3000)
+        } else {
+          setError(data.error || 'Ошибка перевода')
+        }
+      } catch (err) {
+        setError((err as Error).message || 'Ошибка сети')
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
   // Экран успеха
-  if (success && txHash) {
+  if (success) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-        <div className="bg-white rounded-3xl max-w-md w-full p-6 relative">
+        <div className="bg-white rounded-2xl max-w-md w-full p-6 relative shadow-xl">
           <button
             onClick={onClose}
             className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <X size={20} />
+            <X size={20} className="text-gray-600" />
           </button>
 
           <div className="text-center">
@@ -125,25 +152,29 @@ export default function SendModal({ isOpen, onClose, currency, balance, privateK
             </h2>
             
             <p className="text-gray-600 mb-6">
-              {amount} {currency} отправлено на<br />
-              <span className="font-mono text-sm">{recipient.slice(0, 10)}...{recipient.slice(-6)}</span>
+              {amount} {currency} отправлено {isCrypto ? 'на' : 'пользователю'}<br />
+              <span className="font-mono text-sm">
+                {isCrypto ? `${recipient.slice(0, 10)}...${recipient.slice(-6)}` : recipient}
+              </span>
             </p>
 
-            <div className="bg-gray-50 rounded-xl p-4 mb-6">
-              <p className="text-xs text-gray-500 mb-2">Хеш транзакции:</p>
-              <p className="font-mono text-xs text-gray-900 break-all mb-3">
-                {txHash}
-              </p>
-              <a
-                href={`https://tronscan.org/#/transaction/${txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center justify-center gap-2"
-              >
-                Посмотреть в обозревателе
-                <ExternalLink size={16} />
-              </a>
-            </div>
+            {isCrypto && txHash && (
+              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                <p className="text-xs text-gray-500 mb-2">Хеш транзакции:</p>
+                <p className="font-mono text-xs text-gray-900 break-all mb-3">
+                  {txHash}
+                </p>
+                <a
+                  href={`https://tronscan.org/#/transaction/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center justify-center gap-2"
+                >
+                  Посмотреть в обозревателе
+                  <ExternalLink size={16} />
+                </a>
+              </div>
+            )}
 
             <p className="text-sm text-gray-500">
               Окно закроется автоматически...
@@ -156,12 +187,12 @@ export default function SendModal({ isOpen, onClose, currency, balance, privateK
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 relative">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 relative shadow-xl">
         <button
           onClick={onClose}
           className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <X size={20} />
+          <X size={20} className="text-gray-600" />
         </button>
 
         <div className="mb-6">
@@ -186,7 +217,7 @@ export default function SendModal({ isOpen, onClose, currency, balance, privateK
         <div className="space-y-4 mb-6">
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-              {isCrypto ? 'Адрес получателя (TRC-20)' : 'ID получателя'}
+              {isCrypto ? 'Адрес получателя (TRC-20)' : 'Логин получателя'}
             </label>
             <input
               type="text"

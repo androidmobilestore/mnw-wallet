@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma/db'
-import TronWeb from 'tronweb'
 import crypto from 'crypto'
 import * as bip39 from 'bip39'
+import { utils } from 'tronweb'
 
 // Генерация уникального кибер-логина
 function generateCyberLogin(): string {
-  const adjectives = ['Neo', 'Cyber', 'Quantum', 'Alpha', 'Beta', 'Sigma', 'Omega']
-  const nouns = ['Wolf', 'Tiger', 'Eagle', 'Dragon', 'Phoenix', 'Falcon']
-  const randomNum = Math.floor(Math.random() * 9999)
-  
-  const adj = adjectives[Math.floor(Math.random() * adjectives.length)]
-  const noun = nouns[Math.floor(Math.random() * nouns.length)]
-  
-  return `${adj}${noun}#${randomNum}`
+  const vowels = ['a', 'e', 'i', 'o', 'u', 'y']
+  const consonants = ['b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'z']
+
+  const length = 4 + Math.floor(Math.random() * 3)
+  let word = ''
+  for (let i = 0; i < length; i++) {
+    const pool = i % 2 === 0 ? consonants : vowels
+    word += pool[Math.floor(Math.random() * pool.length)]
+  }
+
+  const number = Math.floor(Math.random() * 10000)
+  const tag = String(number).padStart(4, '0')
+
+  return `${word}#${tag}`
 }
 
 // Генерация реферального кода
@@ -68,14 +74,12 @@ export async function POST(req: NextRequest) {
     console.log('🔑 Mnemonic generated:', mnemonic.split(' ').length, 'words')
 
     // Создаём TRON кошелек из мнемоники
-    const tronWeb = new TronWeb({ fullHost: 'https://api.trongrid.io' })
-    
     // Генерируем приватный ключ из мнемоники
     const seed = await bip39.mnemonicToSeed(mnemonic)
     const privateKeyHex = seed.toString('hex').slice(0, 64)
     
     // Создаём адрес из приватного ключа
-    const address = tronWeb.address.fromPrivateKey(privateKeyHex)
+    const address = utils.crypto.getBase58CheckAddress(utils.crypto.getAddressFromPriKey(Buffer.from(privateKeyHex, 'hex')))
 
     console.log('🔐 Private key generated')
     console.log('✅ Address generated:', address)

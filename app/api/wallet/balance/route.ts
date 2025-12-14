@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma/db'
+import { updateBalancesFromBlockchain } from '@/lib/crypto/balanceUpdater'
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,6 +29,26 @@ export async function GET(req: NextRequest) {
       )
     }
 
+    // Обновляем балансы из блокчейна
+    if (user.tronAddress) {
+      try {
+        const balanceResult = await updateBalancesFromBlockchain(user.tronAddress, userId)
+        if (balanceResult !== null) {
+          console.log('✅ Balances updated from blockchain')
+        } else {
+          console.log('⚠️ Balances preserved due to network error')
+        }
+      } catch (error) {
+        console.error('⚠️ Error updating balances from blockchain:', error)
+      }
+    }
+
+    // Получаем обновленные кошельки
+    const updatedWallets = await prisma.wallet.findMany({
+      where: { userId },
+      orderBy: { currency: 'asc' }
+    })
+
     // Формируем балансы
     const balances: { [key: string]: number } = {
       RUB: 0,
@@ -35,7 +56,7 @@ export async function GET(req: NextRequest) {
       TRX: 0
     }
 
-    user.wallets.forEach((wallet) => {
+    updatedWallets.forEach((wallet) => {
       if (wallet.currency in balances) {
         balances[wallet.currency] = wallet.balance
       }

@@ -21,12 +21,12 @@ export default function ReferralCard({ user }: ReferralCardProps) {
   const referralBalance = user?.referralBalance || 0
 
   return (
-    <div className="bg-white rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-shadow duration-200">
+    <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
       {/* Заголовок */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
-            <Gift size={24} className="text-white" strokeWidth={2.5} />
+          <div className="w-12 h-12 bg-moneteum/10 rounded-xl flex items-center justify-center">
+            <Gift size={24} className="text-moneteum" strokeWidth={2} />
           </div>
           <div>
             <h3 className="text-lg font-bold text-gray-900">Рефералы</h3>
@@ -36,7 +36,7 @@ export default function ReferralCard({ user }: ReferralCardProps) {
       </div>
 
       {/* Баланс вознаграждений */}
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-moneteum/30 rounded-xl p-5 mb-4 relative overflow-hidden">
+      <div className="bg-moneteum/5 border border-moneteum/20 rounded-xl p-5 mb-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-20 h-20 bg-moneteum/10 rounded-full blur-2xl"></div>
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
@@ -55,9 +55,9 @@ export default function ReferralCard({ user }: ReferralCardProps) {
       </div>
 
       {/* Информация о программе */}
-      <div className="bg-gradient-to-r from-orange-50 to-pink-50 border border-orange-200 rounded-xl p-4 mb-4">
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-pink-500 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md">
+          <div className="w-10 h-10 bg-moneteum/10 rounded-lg flex items-center justify-center flex-shrink-0">
             <span className="text-lg">💰</span>
           </div>
           <div>
@@ -90,10 +90,10 @@ export default function ReferralCard({ user }: ReferralCardProps) {
       </div>
 
       {/* Статистика */}
-      <div className="flex items-center justify-between p-4 bg-gray-100 rounded-xl mb-4 border border-gray-200">
+      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl mb-4 border border-gray-200">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-            <Users size={20} className="text-moneteum" strokeWidth={2.5} />
+          <div className="w-10 h-10 bg-moneteum/10 rounded-lg flex items-center justify-center">
+            <Users size={20} className="text-moneteum" strokeWidth={2} />
           </div>
           <span className="text-sm font-semibold text-gray-700">Приглашено друзей</span>
         </div>
@@ -103,9 +103,9 @@ export default function ReferralCard({ user }: ReferralCardProps) {
       {/* Кнопка поделиться */}
       <button
         onClick={copyReferralCode}
-        className="w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white py-3 rounded-xl font-bold hover:from-orange-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] flex items-center justify-center gap-2"
+        className="w-full bg-moneteum text-white py-3 rounded-xl font-bold hover:bg-moneteum-dark transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2"
       >
-        <Share2 size={18} strokeWidth={2.5} />
+        <Share2 size={18} strokeWidth={2} />
         {copied ? 'Скопировано!' : 'Поделиться ссылкой'}
       </button>
     </div>

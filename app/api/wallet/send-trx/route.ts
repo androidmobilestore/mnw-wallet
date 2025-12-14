@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma/db'
+import { decrypt } from '@/lib/crypto/encryption'
+import TronWeb from 'tronweb'
 
 export async function POST(request: Request) {
   try {
-    const { privateKey, toAddress, amount } = await request.json()
+    const { userId, toAddress, amount } = await request.json()
     
-    if (!privateKey || !toAddress || !amount) {
+    if (!userId || !toAddress || !amount) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields' },
         { status: 400 }
@@ -12,12 +15,30 @@ export async function POST(request: Request) {
     }
     
     console.log('🚀 Sending TRX...')
+    console.log('User ID:', userId)
     console.log('To:', toAddress)
     console.log('Amount:', amount)
     
-    const TronWeb = require('tronweb')
+    // Get user with encrypted private key
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        encryptedPrivateKey: true,
+        tronAddress: true
+      }
+    })
     
-    const tronWeb = new TronWeb({
+    if (!user || !user.encryptedPrivateKey) {
+      return NextResponse.json(
+        { success: false, error: 'User or private key not found' },
+        { status: 404 }
+      )
+    }
+    
+    // Decrypt the private key
+    const privateKey = decrypt(user.encryptedPrivateKey)
+    
+    const tronWeb = new (TronWeb as any).TronWeb({
       fullHost: 'https://api.trongrid.io',
     })
     
@@ -38,7 +59,7 @@ export async function POST(request: Request) {
     
     // Проверяем баланс
     const balance = await tronWeb.trx.getBalance(fromAddress)
-    const balanceInTRX = balance / 1_000_000
+    const balanceInTRX = Number(balance) / 1_000_000
     
     console.log('Balance:', balanceInTRX, 'TRX')
     
@@ -88,12 +109,12 @@ export async function POST(request: Request) {
       )
     }
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error sending TRX:', error)
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || 'Failed to send transaction' 
+        error: (error as Error).message || 'Failed to send transaction' 
       },
       { status: 500 }
     )

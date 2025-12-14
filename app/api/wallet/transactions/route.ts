@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma/db'
+import { updateBalancesOnTransactionFetch } from '@/lib/crypto/balanceUpdater'
 
 const TRONGRID_API = 'https://api.trongrid.io'
 const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
+
+interface Transaction {
+  id: string
+  type: string
+  currency: string
+  amount: number
+  from: string
+  to: string
+  status: string
+  createdAt: string
+  txHash: string
+}
 
 export async function POST(request: Request) {
   try {
@@ -16,7 +30,7 @@ export async function POST(request: Request) {
     
     console.log('📊 Fetching transactions for:', address)
     
-    const transactions: any[] = []
+    const transactions: Transaction[] = []
     
     // Получаем TRX транзакции
     try {
@@ -86,16 +100,34 @@ export async function POST(request: Request) {
     
     console.log('✅ Total transactions:', transactions.length)
     
+    // Обновляем балансы пользователя
+    try {
+      const user = await prisma.user.findFirst({
+        where: { tronAddress: address }
+      })
+      
+      if (user) {
+        const balanceResult = await updateBalancesOnTransactionFetch(address, user.id)
+        if (balanceResult !== null) {
+          console.log('✅ Balances updated after transaction fetch')
+        } else {
+          console.log('⚠️ Balances preserved due to network error')
+        }
+      }
+    } catch (error) {
+      console.error('⚠️ Error updating balances:', error)
+    }
+    
     return NextResponse.json({
       success: true,
       transactions: transactions.slice(0, 20),
       timestamp: new Date().toISOString()
     })
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Error fetching transactions:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: (error as Error).message },
       { status: 500 }
     )
   }

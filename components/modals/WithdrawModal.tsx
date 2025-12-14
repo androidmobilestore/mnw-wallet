@@ -5,10 +5,11 @@ import { X, Banknote, MapPin, User, Phone, AlertCircle } from 'lucide-react'
 
 interface WithdrawModalProps {
   onClose: () => void
+  userId: string
   balance: number
 }
 
-export default function WithdrawModal({ onClose, balance }: WithdrawModalProps) {
+export default function WithdrawModal({ onClose, userId, balance }: WithdrawModalProps) {
   const [amount, setAmount] = useState('')
   const [city, setCity] = useState('moscow')
   const [fullName, setFullName] = useState('')
@@ -18,10 +19,8 @@ export default function WithdrawModal({ onClose, balance }: WithdrawModalProps) 
 
   const cities = [
     { value: 'moscow', label: 'Москва' },
-    { value: 'spb', label: 'Санкт-Петербург' },
-    { value: 'kazan', label: 'Казань' },
-    { value: 'ekb', label: 'Екатеринбург' },
-    { value: 'nsk', label: 'Новосибирск' },
+    { value: 'nnov', label: 'Нижний Новгород' },
+    { value: 'kgd', label: 'Калининград' },
   ]
 
   // ✅ ДОБАВЛЕНО async
@@ -54,6 +53,7 @@ export default function WithdrawModal({ onClose, balance }: WithdrawModalProps) 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId,
           amount: parseFloat(amount),
           currency: 'RUB',
           city,
@@ -79,16 +79,16 @@ export default function WithdrawModal({ onClose, balance }: WithdrawModalProps) 
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4 overflow-y-auto py-8">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 relative my-8">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 relative my-8 shadow-xl">
         <button
           onClick={onClose}
           className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <X size={20} />
+          <X size={20} className="text-gray-600" />
         </button>
 
         <div className="mb-6">
-          <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mb-4">
+          <div className="w-12 h-12 bg-moneteum rounded-xl flex items-center justify-center mb-4">
             <Banknote size={24} className="text-white" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-1">

@@ -6,16 +6,24 @@ export function generateMnemonic(): string {
 }
 
 export function generateCyberLogin(seed: string): string {
-  const prefixes = ['Mega', 'Cyber', 'Crypto', 'Neo', 'Quantum', 'Alpha', 'Beta', 'Ultra', 'Super', 'Hyper']
-  const suffixes = ['Tron', 'Wolf', 'Tiger', 'Dragon', 'Phoenix', 'Hawk', 'Lion', 'Eagle', 'Bear', 'Fox']
-  
-  // Используем seed для генерации индексов
+  const vowels = ['a', 'e', 'i', 'o', 'u', 'y']
+  const consonants = ['b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'z']
+
+  // Используем seed для детерминированной генерации слова и номера
   const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  const prefix = prefixes[hash % prefixes.length]
-  const suffix = suffixes[(hash * 7) % suffixes.length]
-  const number = 1000 + (hash % 9000)
-  
-  return `${prefix}${suffix}#${number}`
+  const length = 4 + (hash % 3)
+
+  let word = ''
+  for (let i = 0; i < length; i++) {
+    const pool = i % 2 === 0 ? consonants : vowels
+    const idx = (hash + i * 17) % pool.length
+    word += pool[idx]
+  }
+
+  const number = hash % 10000
+  const tag = String(number).padStart(4, '0')
+
+  return `${word}#${tag}`
 }
 
 export function generateReferralCode(): string {

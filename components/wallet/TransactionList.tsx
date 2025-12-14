@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ArrowUpRight, ArrowDownLeft, RefreshCw, Gift, ExternalLink } from 'lucide-react'
+import { useBalanceUpdate } from '@/contexts/BalanceUpdateContext'
 
 interface Transaction {
   id: string
@@ -24,6 +25,7 @@ interface TransactionListProps {
 export default function TransactionList({ transactions: mockTransactions, userAddress }: TransactionListProps) {
   const [realTransactions, setRealTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(false)
+  const { triggerBalanceUpdate } = useBalanceUpdate()
 
   useEffect(() => {
     if (userAddress) {
@@ -34,7 +36,12 @@ export default function TransactionList({ transactions: mockTransactions, userAd
   const loadTransactions = async () => {
     if (!userAddress) return
     
-    setLoading(true)
+    // Only show loading indicator for initial load
+    const isFirstLoad = realTransactions.length === 0;
+    if (isFirstLoad) {
+      setLoading(true);
+    }
+    
     try {
       console.log('📊 Loading blockchain transactions...')
       
@@ -49,11 +56,15 @@ export default function TransactionList({ transactions: mockTransactions, userAd
       if (data.success) {
         setRealTransactions(data.transactions)
         console.log('✅ Loaded', data.transactions.length, 'transactions')
+        // Trigger balance update in WalletCard
+        triggerBalanceUpdate()
       }
     } catch (error) {
       console.error('❌ Error loading transactions:', error)
     } finally {
-      setLoading(false)
+      if (isFirstLoad) {
+        setLoading(false);
+      }
     }
   }
 
@@ -93,7 +104,7 @@ export default function TransactionList({ transactions: mockTransactions, userAd
       case 'referral_reward':
         return 'text-moneteum'
       case 'send':
-        return 'text-gray-900'
+        return 'text-red-500'
       case 'exchange':
         return 'text-blue-600'
       default:
@@ -101,8 +112,14 @@ export default function TransactionList({ transactions: mockTransactions, userAd
     }
   }
 
+  // Функция для усечения адреса
+  const truncateAddress = (address: string) => {
+    if (!address) return ''
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
+  }
+
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6">
+    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-bold text-gray-900">Операции</h2>
         <div className="flex items-center gap-3">
@@ -114,7 +131,7 @@ export default function TransactionList({ transactions: mockTransactions, userAd
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
             title="Обновить"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={loading ? 'animate-spin text-moneteum' : 'text-gray-600'} />
           </button>
         </div>
       </div>
@@ -142,6 +159,12 @@ export default function TransactionList({ transactions: mockTransactions, userAd
                   <p className="text-sm font-semibold text-gray-900">
                     {getTypeText(tx.type, tx.description)}
                   </p>
+                  {/* Показываем отправителя для входящих транзакций */}
+                  {tx.type === 'receive' && tx.from && (
+                    <p className="text-xs text-gray-500">
+                      От: {truncateAddress(tx.from)}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-500">
                     {new Date(tx.createdAt).toLocaleDateString('ru-RU', {
                       day: 'numeric',
@@ -168,7 +191,7 @@ export default function TransactionList({ transactions: mockTransactions, userAd
                     className="opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Посмотреть в обозревателе"
                   >
-                    <ExternalLink size={16} className="text-blue-600 hover:text-blue-700" />
+                    <ExternalLink size={16} className="text-moneteum hover:text-moneteum-dark" />
                   </a>
                 )}
               </div>

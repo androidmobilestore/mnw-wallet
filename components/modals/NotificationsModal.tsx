@@ -7,7 +7,7 @@ interface NotificationsModalProps {
   onClose: () => void
 }
 
-export default function NotificationsModal({ isOpen, onClose }: NotificationsModalProps) {
+export default function NotificationsModal({ onClose }: NotificationsModalProps) {
   const [notifications, setNotifications] = useState({
     transactions: true,
     referrals: true,
@@ -22,12 +22,12 @@ export default function NotificationsModal({ isOpen, onClose }: NotificationsMod
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 relative">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 relative shadow-xl">
         <button
           onClick={onClose}
           className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <X size={20} />
+          <X size={20} className="text-gray-600" />
         </button>
 
         <div className="mb-6">
